@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Choose, fork, adapt and run open-weight AI models.">
+  <title>OpenWeight — Choose · Fork · Adapt · Run</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="OpenWeight home">
+        <span class="brand-mark">OW</span>
+        <span>OpenWeight</span>
+      </a>
+      <div class="prototype-badge">Prototype · mock compute</div>
+    </header>
+
+    <section class="hero">
+      <p class="eyebrow">Replit for open-weight AI</p>
+      <h1>Choose. Fork.<br><span>Adapt. Run.</span></h1>
+      <p class="lede">Open a frontier model, create your own lineage, describe how it should change, and start your version.</p>
+    </section>
+
+    <nav class="steps" aria-label="Product loop">
+      <button class="step active" data-stage="choose"><span>1</span>Choose</button>
+      <button class="step" data-stage="fork" disabled><span>2</span>Fork</button>
+      <button class="step" data-stage="adapt" disabled><span>3</span>Adapt</button>
+      <button class="step" data-stage="run" disabled><span>4</span>Run</button>
+    </nav>
+
+    <section id="notice" class="notice hidden" role="status"></section>
+
+    <section id="choose" class="panel stage active-stage">
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">01 · Choose</p>
+          <h2>Start from a model.</h2>
+        </div>
+        <p>Version one supports one deliberately chosen model.</p>
+      </div>
+      <div id="model-list" class="model-grid" aria-live="polite"></div>
+    </section>
+
+    <section id="fork" class="panel stage">
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">02 · Fork</p>
+          <h2>Create your lineage.</h2>
+        </div>
+        <p>A fork references the immutable base weights and starts your own model history.</p>
+      </div>
+      <form id="fork-form" class="action-card">
+        <label>
+          Fork name
+          <input id="fork-name" name="name" value="Caesey's GLM-5.2" maxlength="80" required>
+        </label>
+        <div id="fork-source" class="source-summary"></div>
+        <button class="primary" type="submit">Fork model</button>
+      </form>
+    </section>
+
+    <section id="adapt" class="panel stage">
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">03 · Adapt</p>
+          <h2>Define how yours should change.</h2>
+        </div>
+        <p>This first slice creates a LoRA adaptation specification. Training comes next.</p>
+      </div>
+      <form id="adapt-form" class="action-card">
+        <label>
+          Adaptation name
+          <input id="adapt-name" name="name" value="AI research specialist" maxlength="80" required>
+        </label>
+        <label>
+          Objective
+          <textarea id="adapt-objective" name="objective" rows="6" required>Make this fork exceptionally useful for open-weight AI research, model analysis, experiment design, and implementation.</textarea>
+        </label>
+        <div class="method-row">
+          <div><span class="method-label">Method</span><strong>LoRA</strong></div>
+          <div><span class="method-label">Dataset</span><strong>Not connected yet</strong></div>
+        </div>
+        <button class="primary" type="submit">Create adaptation</button>
+      </form>
+    </section>
+
+    <section id="run" class="panel stage">
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">04 · Run</p>
+          <h2>Start your model state.</h2>
+        </div>
+        <p>The current compute adapter is simulated, so the whole product loop is testable without GPU credentials.</p>
+      </div>
+      <div class="run-grid">
+        <article class="action-card run-card">
+          <div class="status-line">
+            <span id="run-dot" class="status-dot"></span>
+            <div><small>Status</small><strong id="run-status">Not running</strong></div>
+          </div>
+          <div id="lineage" class="lineage"></div>
+          <button id="run-button" class="primary">Run model</button>
+        </article>
+        <article class="playground">
+          <div class="playground-head">
+            <div><small>Playground</small><strong id="playground-title">Your fork</strong></div>
+            <code id="endpoint">Endpoint appears after run</code>
+          </div>
+          <div id="messages" class="messages">
+            <p class="empty-state">Run the model to begin.</p>
+          </div>
+          <form id="chat-form" class="composer">
+            <input id="chat-input" placeholder="Ask your model…" disabled required>
+            <button type="submit" disabled>Send</button>
+          </form>
+        </article>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
