@@ -85,7 +85,7 @@ test("Ollama provider parses a real chat-shaped response with identity metadata"
     assert.equal(message.realExecution, true);
     assert.equal(message.metrics.promptTokens, 8);
     assert.equal(backend.state.lastChatBody.stream, false);
-    assert.match(backend.state.lastChatBody.messages[0].content, /not GLM-5.2/i);
+    assert.match(backend.state.lastChatBody.messages[0].content, /not the pinned/i);
   } finally {
     await backend.stop();
   }

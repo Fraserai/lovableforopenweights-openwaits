@@ -2,4 +2,6 @@ node_modules/
 .env
 .env.*
 data/workspaces.json
+data/models/
+data/artifacts/
 .DS_Store

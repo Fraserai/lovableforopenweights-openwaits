@@ -4,7 +4,8 @@ const state = {
   workspace: null,
   runtime: null,
   currentStage: "choose",
-  runSelection: "base"
+  runSelection: "base",
+  adaptationPoll: null
 };
 
 const notice = document.querySelector("#notice");
@@ -58,7 +59,7 @@ function stageIsUnlocked(stage) {
 function stageIsComplete(stage) {
   if (stage === "choose") return Boolean(state.model);
   if (stage === "fork") return Boolean(state.workspace);
-  if (stage === "adapt") return Boolean(state.workspace?.adaptation);
+  if (stage === "adapt") return ["complete", "specification-created"].includes(state.workspace?.adaptation?.status);
   return state.workspace?.run?.status === "running";
 }
 
@@ -77,7 +78,9 @@ function renderSteps() {
   const statuses = {
     choose: state.model?.name || "Not chosen",
     fork: state.workspace?.name || "Not created",
-    adapt: state.workspace?.adaptation?.name || "Not requested",
+    adapt: state.workspace?.adaptation
+      ? `${state.workspace.adaptation.name} · ${adaptationStatusLabel(state.workspace.adaptation.status)}`
+      : "Not requested",
     run: runStatusLabel(state.workspace?.run)
   };
 
@@ -94,6 +97,15 @@ function shortRevision(revision) {
   return revision ? revision.slice(0, 9) : "unavailable";
 }
 
+function adaptationStatusLabel(status) {
+  return {
+    "specification-created": "Specification created",
+    training: "Training",
+    complete: "Complete",
+    failed: "Failed"
+  }[status] || "Not requested";
+}
+
 function renderRuntimeIdentity() {
   const runtime = state.runtime;
   if (!runtime) return;
@@ -103,7 +115,7 @@ function renderRuntimeIdentity() {
   badge.classList.toggle("simulation", !real);
   setText(
     "environment-label",
-    real ? `Real development runtime · ${runtime.actualModelId}` : "Simulation environment"
+    real ? `Real local runtime · ${runtime.providerDisplayName}` : "Simulation environment"
   );
 
   const flag = byId("execution-flag");
@@ -115,7 +127,7 @@ function renderRuntimeIdentity() {
   setText(
     "runtime-identity-note",
     real
-      ? `Real via ${runtime.providerDisplayName}; development substitute, not GLM-5.2`
+      ? `Real via ${runtime.providerDisplayName}; ${runtime.actualModelId}`
       : "No model inference; responses are simulated"
   );
   const playgroundMode = byId("playground-mode");
@@ -133,7 +145,7 @@ function renderModelList() {
 
     const visual = document.createElement("div");
     visual.className = "model-visual";
-    visual.textContent = "5.2";
+    visual.textContent = "0.6B";
 
     const content = document.createElement("div");
     const meta = document.createElement("div");
@@ -206,6 +218,64 @@ function renderSummary() {
       : "";
 }
 
+function renderAdaptation() {
+  const adaptation = state.workspace?.adaptation;
+  const progress = byId("adaptation-progress");
+  progress.classList.toggle("hidden", !adaptation);
+  if (!adaptation) return;
+
+  const form = byId("adapt-form");
+  if (form.dataset.adaptationId !== adaptation.id) {
+    form.dataset.adaptationId = adaptation.id;
+    byId("adapt-objective").value = adaptation.objective;
+    byId("adapt-name").value = adaptation.name;
+    byId("examples-list").replaceChildren();
+    (adaptation.examples || []).forEach((example) => addExample(example));
+    while (byId("examples-list").children.length < 5) addExample();
+  }
+
+  setText("adaptation-status", adaptationStatusLabel(adaptation.status));
+  setText(
+    "adaptation-status-note",
+    adaptation.status === "training"
+      ? "Your examples are being learned locally. You can leave this screen open."
+      : adaptation.status === "complete"
+        ? `${adaptation.exampleCount} examples produced a real adapter.`
+        : adaptation.status === "failed"
+          ? adaptation.error || "Training failed. Update the request and try again."
+          : "The request is saved; no real training ran in this environment."
+  );
+  setText("adaptation-backend", adaptation.trainingBackend || "Not run (simulation)");
+  setText("adaptation-revision", adaptation.baseRevision || state.workspace.baseModel.revision);
+  setText("adaptation-path", adaptation.adapterPath || "Not created");
+  const config = adaptation.configuration;
+  setText(
+    "adaptation-config",
+    config
+      ? `${config.iterations} steps · ${config.numLayers} layers · batch ${config.batchSize}`
+      : "Not applicable"
+  );
+  setText("adaptation-logs", adaptation.logs || "No training logs yet");
+
+  const training = adaptation.status === "training";
+  byId("adapt-button").disabled = training;
+  byId("adapt-button").textContent = training ? "Adaptation training..." : "Start adaptation";
+  scheduleAdaptationPoll(training);
+}
+
+function scheduleAdaptationPoll(training) {
+  if (!training) {
+    clearTimeout(state.adaptationPoll);
+    state.adaptationPoll = null;
+    return;
+  }
+  if (state.adaptationPoll) return;
+  state.adaptationPoll = setTimeout(async () => {
+    state.adaptationPoll = null;
+    await refreshWorkspace().catch((error) => showNotice(error.message));
+  }, 1_000);
+}
+
 function appendMessage(role, content, label) {
   const messages = byId("messages");
   messages.querySelector(".empty-state")?.remove();
@@ -236,16 +306,22 @@ function renderRun() {
   if (!workspace || !runtime) return;
 
   setText("base-revision", workspace.baseModel.revision);
+  setText("base-state-label", `${workspace.baseModel.name} @ ${shortRevision(workspace.baseModel.revision)}`);
   const adaptedInput = document.querySelector('input[name="model-state"][value="adapted"]');
-  const adaptedRunnable = Boolean(workspace.adaptation) && runtime.supportsAdaptedState;
+  const adaptedRunnable = Boolean(workspace.adaptation) && runtime.supportsAdaptedState &&
+    (!runtime.realExecution || workspace.adaptation.status === "complete");
   adaptedInput.disabled = !adaptedRunnable;
   setText(
     "adapted-state-label",
     !workspace.adaptation
       ? "Create an adaptation first"
-      : adaptedRunnable
+      : workspace.adaptation.status === "training"
+        ? "Training in progress"
+        : workspace.adaptation.status === "failed"
+          ? "Training failed"
+          : adaptedRunnable
         ? workspace.adaptation.name
-        : "Specification only; no trained adapter"
+        : "No runnable adapter"
   );
   setText(
     "adaptation-objective-summary",
@@ -302,13 +378,13 @@ function renderRun() {
     if (run.realExecution) {
       appendMessage(
         "assistant",
-        `${run.actualModelId} is running through ${run.providerDisplayName}. This is genuine model inference from a development substitute, not GLM-5.2.`,
+        `${run.modelState.label} is running through ${run.providerDisplayName}. This is genuine inference from ${run.actualModelId}.`,
         `${run.providerDisplayName} · ${run.actualModelId} · Real`
       );
     } else {
       appendMessage(
         "assistant",
-        `The ${run.modelState.label} state is ready in simulation. No GLM-5.2 weights, training, or inference are running.`,
+        `The ${run.modelState.label} state is ready in simulation. No model weights, training, or inference are running.`,
         "Simulation"
       );
     }
@@ -327,9 +403,43 @@ function renderAll() {
   renderModelList();
   renderForkSource();
   renderSummary();
+  renderAdaptation();
   renderSteps();
   renderRun();
 }
+
+function addExample(example = {}) {
+  const list = byId("examples-list");
+  if (list.children.length >= 20) return;
+  const row = document.createElement("div");
+  row.className = "example-row";
+  const index = list.children.length + 1;
+  row.innerHTML = `
+    <div class="example-head"><strong>Example ${index}</strong><button class="remove-example" type="button">Remove</button></div>
+    <label>User message<input class="example-user" maxlength="4000" required></label>
+    <label>Ideal response<textarea class="example-assistant" maxlength="8000" required></textarea></label>
+  `;
+  row.querySelector(".example-user").value = example.user || "";
+  row.querySelector(".example-assistant").value = example.assistant || "";
+  row.querySelector(".remove-example").addEventListener("click", () => {
+    if (list.children.length <= 5) return;
+    row.remove();
+    [...list.children].forEach((item, itemIndex) => {
+      item.querySelector(".example-head strong").textContent = `Example ${itemIndex + 1}`;
+    });
+  });
+  list.appendChild(row);
+}
+
+function collectExamples() {
+  return [...document.querySelectorAll(".example-row")].map((row) => ({
+    user: row.querySelector(".example-user").value,
+    assistant: row.querySelector(".example-assistant").value
+  }));
+}
+
+byId("add-example").addEventListener("click", () => addExample());
+for (let index = 0; index < 5; index += 1) addExample();
 
 async function refreshWorkspace() {
   if (!state.workspace) return;
@@ -379,11 +489,12 @@ byId("adapt-form").addEventListener("submit", async (event) => {
       method: "POST",
       body: JSON.stringify({
         name: byId("adapt-name").value,
-        objective: byId("adapt-objective").value
+        objective: byId("adapt-objective").value,
+        examples: collectExamples()
       })
     });
     state.workspace = workspace;
-    state.runSelection = state.runtime.supportsAdaptedState ? "adapted" : "base";
+    state.runSelection = state.runtime.realExecution ? "base" : "adapted";
     resetPlayground("Start a state to open the playground.");
     renderAll();
     openStage("run");

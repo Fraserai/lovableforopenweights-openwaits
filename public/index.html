@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Choose, fork, adapt, and run GLM-5.2 in one open-weight AI workspace.">
+  <meta name="description" content="Choose, fork, adapt, and run a pinned open-weight development model.">
   <title>OpenWeight | Choose, Fork, Adapt, Run</title>
   <link rel="stylesheet" href="/styles.css">
 </head>
@@ -21,7 +21,7 @@
   <main class="workspace-shell">
     <aside class="workspace-rail">
       <div class="rail-heading">
-        <p>GLM-5.2 workspace</p>
+        <p>Open-weight workspace</p>
         <h1>Choose. Fork.<br>Adapt. Run.</h1>
       </div>
 
@@ -86,21 +86,35 @@
         <header class="stage-heading">
           <p>03 / Adapt</p>
           <h2 id="adapt-title">Describe the version you need</h2>
-          <span>This creates a specification only. No training runs in this environment.</span>
+          <span>Show your version how ideal conversations should work.</span>
         </header>
         <form id="adapt-form" class="action-form">
-          <label class="intent-label" for="adapt-objective">What should your version of GLM-5.2 become better at?</label>
+          <label class="intent-label" for="adapt-objective">What should your version become better at?</label>
           <textarea id="adapt-objective" name="objective" rows="7" placeholder="For example: Explain open-weight model architecture clearly and turn research ideas into practical experiments." required></textarea>
+          <section class="examples-section" aria-labelledby="examples-title">
+            <div class="examples-heading">
+              <div><strong id="examples-title">Examples</strong><small>Provide 5–20 user messages with ideal responses.</small></div>
+              <button id="add-example" class="secondary compact" type="button" aria-label="Add example">+ Add</button>
+            </div>
+            <div id="examples-list"></div>
+          </section>
+          <div id="adaptation-progress" class="adaptation-progress hidden" role="status">
+            <strong id="adaptation-status">Adaptation specification</strong>
+            <span id="adaptation-status-note"></span>
+          </div>
           <details class="technical-details form-details">
             <summary>Adaptation details</summary>
             <label for="adapt-name">Adaptation label</label>
             <input id="adapt-name" name="name" value="Focused specialist" maxlength="80" required>
             <dl>
-              <div><dt>Method</dt><dd>LoRA specification</dd></div>
-              <div><dt>Training</dt><dd>Not run</dd></div>
+              <div><dt>Training backend</dt><dd id="adaptation-backend">Not started</dd></div>
+              <div><dt>Base revision</dt><dd><code id="adaptation-revision">-</code></dd></div>
+              <div><dt>Adapter</dt><dd><code id="adaptation-path">Not created</code></dd></div>
+              <div><dt>Configuration</dt><dd id="adaptation-config">Available after start</dd></div>
+              <div><dt>Logs</dt><dd><pre id="adaptation-logs">No training logs</pre></dd></div>
             </dl>
           </details>
-          <button class="primary" type="submit">Create adaptation</button>
+          <button id="adapt-button" class="primary" type="submit">Start adaptation</button>
         </form>
       </section>
 
@@ -109,7 +123,7 @@
           <div>
             <p>04 / Run</p>
             <h2 id="run-title">Run a model state</h2>
-            <span>Choose the immutable base or your adaptation specification.</span>
+            <span>Choose the immutable base or your completed adaptation.</span>
           </div>
           <strong id="execution-flag" class="execution-flag simulation">Simulated output</strong>
         </header>
@@ -125,7 +139,7 @@
               <legend>State to start</legend>
               <label>
                 <input type="radio" name="model-state" value="base" checked>
-                <span><strong>Base</strong><small>Immutable GLM-5.2</small></span>
+                <span><strong>Base</strong><small id="base-state-label">Immutable base revision</small></span>
               </label>
               <label id="adapted-state-option">
                 <input type="radio" name="model-state" value="adapted" disabled>

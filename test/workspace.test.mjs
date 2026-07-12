@@ -69,7 +69,7 @@ test("Choose -> Fork -> Adapt -> Run completes an honest simulated playground re
     const modelsResult = await request(app.baseUrl, "/api/models");
     assert.equal(modelsResult.response.status, 200);
     const chosenModel = modelsResult.payload.models.at(0);
-    assert.equal(chosenModel.id, "zai-org/glm-5.2");
+    assert.equal(chosenModel.id, "mlx-community/Qwen3-0.6B-4bit");
     assert.match(chosenModel.revision, /^[a-f0-9]{40}$/);
 
     const forkResult = await request(app.baseUrl, "/api/workspaces", {
@@ -122,7 +122,7 @@ test("Choose -> Fork -> Adapt -> Run completes an honest simulated playground re
     assert.equal(chatResult.payload.message.executionMode, "simulation");
     assert.equal(chatResult.payload.message.modelState.kind, "adapted");
     assert.match(chatResult.payload.message.content, /^Simulated response/);
-    assert.match(chatResult.payload.message.content, /No GLM-5.2 inference was performed/);
+    assert.match(chatResult.payload.message.content, /No model inference was performed/);
 
     const persistedResult = await request(app.baseUrl, `/api/workspaces/${fork.id}`);
     assert.equal(persistedResult.payload.workspace.run.id, running.run.id);
@@ -188,7 +188,7 @@ test("API preserves real Ollama model identity through start, chat, status, and 
     assert.equal(run.provider, "ollama");
     assert.equal(run.realExecution, true);
     assert.equal(run.actualModelId, "qwen3:0.6b");
-    assert.equal(run.requestedModelId, "zai-org/glm-5.2");
+    assert.equal(run.requestedModelId, "mlx-community/Qwen3-0.6B-4bit");
     assert.equal(run.developmentModel, true);
 
     const statusResult = await request(app.baseUrl, `/api/workspaces/${fork.id}/run/status`);

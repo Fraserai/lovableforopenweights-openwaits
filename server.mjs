@@ -10,10 +10,23 @@ import {
   updateWorkspace
 } from "./lib/workspace-store.mjs";
 import { createComputeProvider } from "./lib/compute/index.mjs";
+import { MlxAdaptationTrainer } from "./lib/adaptation/mlx-trainer.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, "public");
 const compute = createComputeProvider();
+const adaptationTrainer = compute.name === "mlx"
+  ? new MlxAdaptationTrainer({
+      modelPath: process.env.MLX_MODEL_PATH,
+      modelId: MODEL_CATALOG[0].id,
+      modelRevision: MODEL_CATALOG[0].revision,
+      artifactsRoot: process.env.MLX_ARTIFACTS_PATH || path.resolve("data/artifacts"),
+      loraCommand: process.env.MLX_LORA_COMMAND,
+      iterations: Number(process.env.MLX_TRAIN_ITERS || 20),
+      numLayers: Number(process.env.MLX_TRAIN_LAYERS || 4),
+      learningRate: Number(process.env.MLX_TRAIN_LEARNING_RATE || 1e-4)
+    })
+  : null;
 const port = Number(process.env.PORT || 3000);
 
 const contentTypes = {
@@ -74,6 +87,7 @@ function runtimeDescription() {
     realExecution: compute.realExecution,
     actualModelId: compute.actualModelId,
     supportsAdaptedState: compute.supportsAdaptedState,
+    supportsRealAdaptation: Boolean(adaptationTrainer),
     backendEndpoint: compute.baseUrl || null,
     hardware: compute.hardware
   };
@@ -122,6 +136,45 @@ async function handleApi(request, response, url) {
     const objective = String(body.objective || "").trim().slice(0, 1000);
     if (!objective) return sendJson(response, 400, { error: "Adaptation objective is required" });
 
+    if (adaptationTrainer) {
+      let training;
+      try {
+        training = await adaptationTrainer.start({
+          workspace: current,
+          name,
+          objective,
+          examples: body.examples
+        });
+      } catch (error) {
+        return sendJson(response, error.status || 400, { error: error.message });
+      }
+      const workspace = await updateWorkspace(params.id, (workspace) => ({
+        ...workspace,
+        phase: "adapting",
+        adaptation: training.adaptation,
+        run: null
+      }));
+      training.completion.then(
+        (completed) => updateWorkspace(params.id, (latest) => ({
+          ...latest,
+          phase: "adapted",
+          adaptation: completed
+        })),
+        (error) => updateWorkspace(params.id, (latest) => ({
+          ...latest,
+          phase: "adaptation-failed",
+          adaptation: {
+            ...latest.adaptation,
+            status: "failed",
+            completedAt: new Date().toISOString(),
+            error: error.message || "MLX-LM training failed",
+            logs: String(error.logs || "").slice(-16_000)
+          }
+        }))
+      );
+      return sendJson(response, 202, { workspace });
+    }
+
     const workspace = await updateWorkspace(params.id, (workspace) => ({
       ...workspace,
       phase: "adapted",
@@ -130,8 +183,10 @@ async function handleApi(request, response, url) {
         name,
         method: "lora",
         objective,
-        datasetStatus: "not-connected",
+        examples: Array.isArray(body.examples) ? body.examples : [],
+        exampleCount: Array.isArray(body.examples) ? body.examples.length : 0,
         status: "specification-created",
+        trainingBackend: null,
         createdAt: new Date().toISOString()
       },
       run: null
@@ -150,6 +205,11 @@ async function handleApi(request, response, url) {
     }
     if (modelState === "adapted" && !current.adaptation) {
       return sendJson(response, 409, { error: "Create an adaptation before running the adapted state" });
+    }
+    if (modelState === "adapted" && compute.realExecution && current.adaptation.status !== "complete") {
+      return sendJson(response, 409, {
+        error: "Real adaptation training must complete before starting the adapted state"
+      });
     }
     if (modelState === "adapted" && !compute.supportsAdaptedState) {
       return sendJson(response, 409, {
