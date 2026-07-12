@@ -9,11 +9,11 @@ import {
   listWorkspaces,
   updateWorkspace
 } from "./lib/workspace-store.mjs";
-import { MockComputeProvider } from "./lib/compute/mock-provider.mjs";
+import { createComputeProvider } from "./lib/compute/index.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, "public");
-const compute = new MockComputeProvider();
+const compute = createComputeProvider();
 const port = Number(process.env.PORT || 3000);
 
 const contentTypes = {
@@ -47,9 +47,45 @@ function routeMatch(pathname, pattern) {
   return match ? match.groups ?? {} : null;
 }
 
+function inactivePhase(workspace) {
+  return workspace.adaptation ? "adapted" : "forked";
+}
+
+function selectedModelState(workspace, kind) {
+  if (kind === "adapted") {
+    return {
+      kind,
+      label: workspace.adaptation.name,
+      adaptationId: workspace.adaptation.id
+    };
+  }
+  return {
+    kind: "base",
+    label: `${workspace.baseModel.name} base`,
+    adaptationId: null
+  };
+}
+
+function runtimeDescription() {
+  return {
+    provider: compute.name,
+    providerDisplayName: compute.displayName,
+    executionMode: compute.executionMode,
+    realExecution: compute.realExecution,
+    actualModelId: compute.actualModelId,
+    supportsAdaptedState: compute.supportsAdaptedState,
+    backendEndpoint: compute.baseUrl || null,
+    hardware: compute.hardware
+  };
+}
+
 async function handleApi(request, response, url) {
   if (request.method === "GET" && url.pathname === "/api/health") {
-    return sendJson(response, 200, { status: "ok", computeProvider: compute.name });
+    return sendJson(response, 200, {
+      status: "ok",
+      computeProvider: compute.name,
+      runtime: runtimeDescription()
+    });
   }
 
   if (request.method === "GET" && url.pathname === "/api/models") {
@@ -115,9 +151,36 @@ async function handleApi(request, response, url) {
     if (modelState === "adapted" && !current.adaptation) {
       return sendJson(response, 409, { error: "Create an adaptation before running the adapted state" });
     }
+    if (modelState === "adapted" && !compute.supportsAdaptedState) {
+      return sendJson(response, 409, {
+        error: `${compute.displayName} cannot run the adapted state because no trained adapter exists`
+      });
+    }
+
+    const startingAt = new Date().toISOString();
+    const startingRun = {
+      id: randomId(),
+      ...runtimeDescription(),
+      status: "starting",
+      requestedModelId: current.baseModel.id,
+      modelState: selectedModelState(current, modelState),
+      endpoint: `/api/workspaces/${current.id}/chat`,
+      startingAt,
+      startedAt: null,
+      error: null
+    };
+    const startingWorkspace = await updateWorkspace(params.id, (workspace) => ({
+      ...workspace,
+      phase: "starting",
+      run: startingRun
+    }));
 
     try {
-      const run = await compute.start({ workspace: current, modelState });
+      const run = await compute.start({
+        workspace: startingWorkspace,
+        modelState,
+        runId: startingRun.id
+      });
       const workspace = await updateWorkspace(params.id, (workspace) => ({
         ...workspace,
         phase: "running",
@@ -127,16 +190,100 @@ async function handleApi(request, response, url) {
     } catch (error) {
       await updateWorkspace(params.id, (workspace) => ({
         ...workspace,
-        phase: workspace.adaptation ? "adapted" : "forked",
+        phase: inactivePhase(workspace),
         run: {
-          provider: compute.name,
-          executionMode: compute.executionMode || "unknown",
+          ...startingRun,
           status: "failed",
           error: error.message || "Compute failed to start",
           failedAt: new Date().toISOString()
         }
       }));
-      return sendJson(response, 503, { error: error.message || "Compute failed to start" });
+      return sendJson(response, error.status || 503, {
+        error: error.message || "Compute failed to start"
+      });
+    }
+  }
+
+  params = routeMatch(url.pathname, /^\/api\/workspaces\/(?<id>[^/]+)\/run\/status$/);
+  if (request.method === "GET" && params) {
+    const current = await getWorkspace(params.id);
+    if (!current) return sendJson(response, 404, { error: "Workspace not found" });
+    if (!current.run) return sendJson(response, 200, { workspace: current });
+    if (current.run.provider !== compute.name) {
+      const workspace = await updateWorkspace(params.id, (workspace) => ({
+        ...workspace,
+        phase: inactivePhase(workspace),
+        run: {
+          ...workspace.run,
+          status: "failed",
+          error:
+            `Persisted run uses ${workspace.run.provider}, but the configured provider is ${compute.name}`,
+          failedAt: new Date().toISOString()
+        }
+      }));
+      return sendJson(response, 200, { workspace });
+    }
+    if (current.run.status === "stopped") {
+      return sendJson(response, 200, { workspace: current });
+    }
+
+    try {
+      const status = await compute.getStatus({ workspace: current });
+      const workspace = await updateWorkspace(params.id, (workspace) => ({
+        ...workspace,
+        phase: status.status === "running" ? "running" : inactivePhase(workspace),
+        run: { ...workspace.run, ...status, error: null }
+      }));
+      return sendJson(response, 200, { workspace });
+    } catch (error) {
+      const workspace = await updateWorkspace(params.id, (workspace) => ({
+        ...workspace,
+        phase: inactivePhase(workspace),
+        run: {
+          ...workspace.run,
+          status: "failed",
+          error: error.message || "Runtime health check failed",
+          failedAt: new Date().toISOString()
+        }
+      }));
+      return sendJson(response, 200, { workspace });
+    }
+  }
+
+  params = routeMatch(url.pathname, /^\/api\/workspaces\/(?<id>[^/]+)\/stop$/);
+  if (request.method === "POST" && params) {
+    const current = await getWorkspace(params.id);
+    if (!current) return sendJson(response, 404, { error: "Workspace not found" });
+    if (!current.run) return sendJson(response, 409, { error: "No runtime has been started" });
+    if (current.run.provider !== compute.name) {
+      return sendJson(response, 409, {
+        error: `Cannot stop a ${current.run.provider} run with the ${compute.name} provider`
+      });
+    }
+
+    try {
+      const run = await compute.stop({ workspace: current });
+      const workspace = await updateWorkspace(params.id, (workspace) => ({
+        ...workspace,
+        phase: inactivePhase(workspace),
+        run
+      }));
+      return sendJson(response, 200, { workspace });
+    } catch (error) {
+      const workspace = await updateWorkspace(params.id, (workspace) => ({
+        ...workspace,
+        phase: inactivePhase(workspace),
+        run: {
+          ...workspace.run,
+          status: "failed",
+          error: error.message || "Runtime failed to stop",
+          failedAt: new Date().toISOString()
+        }
+      }));
+      return sendJson(response, error.status || 503, {
+        error: error.message || "Runtime failed to stop",
+        workspace
+      });
     }
   }
 
@@ -147,12 +294,33 @@ async function handleApi(request, response, url) {
     if (workspace.run?.status !== "running") {
       return sendJson(response, 409, { error: "Run the workspace before chatting" });
     }
+    if (workspace.run.provider !== compute.name) {
+      return sendJson(response, 409, {
+        error: `Run uses ${workspace.run.provider}, but the configured provider is ${compute.name}`
+      });
+    }
     const body = await readJson(request);
     const message = String(body.message || "").trim().slice(0, 4000);
     if (!message) return sendJson(response, 400, { error: "Message is required" });
-    return sendJson(response, 200, {
-      message: await compute.chat({ workspace, message })
-    });
+    try {
+      return sendJson(response, 200, {
+        message: await compute.chat({ workspace, message })
+      });
+    } catch (error) {
+      await updateWorkspace(params.id, (current) => ({
+        ...current,
+        phase: inactivePhase(current),
+        run: {
+          ...current.run,
+          status: "failed",
+          error: error.message || "Runtime chat request failed",
+          failedAt: new Date().toISOString()
+        }
+      }));
+      return sendJson(response, error.status || 502, {
+        error: error.message || "Runtime chat request failed"
+      });
+    }
   }
 
   return sendJson(response, 404, { error: "API route not found" });

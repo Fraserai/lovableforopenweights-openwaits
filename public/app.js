@@ -2,11 +2,11 @@ const state = {
   models: [],
   model: null,
   workspace: null,
+  runtime: null,
   currentStage: "choose",
   runSelection: "base"
 };
 
-const stageOrder = ["choose", "fork", "adapt", "run"];
 const notice = document.querySelector("#notice");
 
 function byId(id) {
@@ -33,7 +33,11 @@ async function api(path, options = {}) {
     ...options
   });
   const payload = await response.json();
-  if (!response.ok) throw new Error(payload.error || "Request failed");
+  if (!response.ok) {
+    const error = new Error(payload.error || "Request failed");
+    error.payload = payload;
+    throw error;
+  }
   return payload;
 }
 
@@ -58,12 +62,23 @@ function stageIsComplete(stage) {
   return state.workspace?.run?.status === "running";
 }
 
+function runStatusLabel(run) {
+  if (!run) return "Not started";
+  if (run.status === "starting") return "Starting";
+  if (run.status === "running") {
+    return run.realExecution ? "Running — real" : "Running — simulated";
+  }
+  if (run.status === "failed") return "Failed";
+  if (run.status === "stopped") return "Stopped";
+  return "Not started";
+}
+
 function renderSteps() {
   const statuses = {
     choose: state.model?.name || "Not chosen",
     fork: state.workspace?.name || "Not created",
     adapt: state.workspace?.adaptation?.name || "Not requested",
-    run: state.workspace?.run?.status === "running" ? "Simulation ready" : "Not started"
+    run: runStatusLabel(state.workspace?.run)
   };
 
   document.querySelectorAll(".step").forEach((button) => {
@@ -77,6 +92,35 @@ function renderSteps() {
 
 function shortRevision(revision) {
   return revision ? revision.slice(0, 9) : "unavailable";
+}
+
+function renderRuntimeIdentity() {
+  const runtime = state.runtime;
+  if (!runtime) return;
+  const real = runtime.realExecution;
+  const badge = byId("environment-badge");
+  badge.classList.toggle("real", real);
+  badge.classList.toggle("simulation", !real);
+  setText(
+    "environment-label",
+    real ? `Real development runtime · ${runtime.actualModelId}` : "Simulation environment"
+  );
+
+  const flag = byId("execution-flag");
+  flag.classList.toggle("real", real);
+  flag.classList.toggle("simulation", !real);
+  flag.textContent = real ? "Real development output" : "Simulated output";
+
+  setText("actual-model-banner", real ? runtime.actualModelId : "No model loaded");
+  setText(
+    "runtime-identity-note",
+    real
+      ? `Real via ${runtime.providerDisplayName}; development substitute, not GLM-5.2`
+      : "No model inference; responses are simulated"
+  );
+  const playgroundMode = byId("playground-mode");
+  playgroundMode.textContent = real ? "Real" : "Simulation";
+  playgroundMode.classList.toggle("real", real);
 }
 
 function renderModelList() {
@@ -144,13 +188,22 @@ function renderForkSource() {
 
 function renderSummary() {
   const workspace = state.workspace;
+  const run = workspace?.run;
   setText("chosen-model-state", state.model ? `${state.model.name} @ ${shortRevision(state.model.revision)}` : "None");
   setText("fork-state", workspace?.name || "Not created");
   setText("adaptation-state", workspace?.adaptation?.objective || "Not requested");
-
-  const running = workspace?.run?.status === "running";
-  setText("active-state", running ? workspace.run.modelState.label : "Not started");
-  setText("execution-state", running ? "Simulation running" : "Simulation");
+  setText(
+    "active-state",
+    run?.status === "running" || run?.status === "starting"
+      ? run.actualModelId || run.modelState?.label || "Starting"
+      : "Not running"
+  );
+  setText("execution-state", runStatusLabel(run));
+  byId("execution-state").className = run?.status === "running"
+    ? run.realExecution ? "real-text" : "simulation-text"
+    : run?.status === "failed"
+      ? "failed-text"
+      : "";
 }
 
 function appendMessage(role, content, label) {
@@ -179,35 +232,62 @@ function resetPlayground(message) {
 
 function renderRun() {
   const workspace = state.workspace;
-  if (!workspace) return;
+  const runtime = state.runtime;
+  if (!workspace || !runtime) return;
 
   setText("base-revision", workspace.baseModel.revision);
   const adaptedInput = document.querySelector('input[name="model-state"][value="adapted"]');
-  adaptedInput.disabled = !workspace.adaptation;
-  setText("adapted-state-label", workspace.adaptation?.name || "Create an adaptation first");
+  const adaptedRunnable = Boolean(workspace.adaptation) && runtime.supportsAdaptedState;
+  adaptedInput.disabled = !adaptedRunnable;
+  setText(
+    "adapted-state-label",
+    !workspace.adaptation
+      ? "Create an adaptation first"
+      : adaptedRunnable
+        ? workspace.adaptation.name
+        : "Specification only; no trained adapter"
+  );
   setText(
     "adaptation-objective-summary",
     workspace.adaptation?.objective || "No adaptation requested. The base state is available."
   );
 
-  if (state.runSelection === "adapted" && !workspace.adaptation) state.runSelection = "base";
+  if (state.runSelection === "adapted" && !adaptedRunnable) state.runSelection = "base";
   document.querySelectorAll('input[name="model-state"]').forEach((input) => {
     input.checked = input.value === state.runSelection;
   });
 
   const run = workspace.run;
   const running = run?.status === "running";
-  const failed = run?.status === "failed";
-  const status = running ? "Simulation ready" : failed ? "Start failed" : "Not started";
-  setText("run-status", status);
-  byId("run-dot").classList.toggle("running", running);
-  setText("provider-detail", run?.provider || "Mock compute");
-  setText("hardware-detail", run?.hardware || "Simulated GPU");
+  const starting = run?.status === "starting";
+  const real = run?.realExecution ?? runtime.realExecution;
+  setText("run-status", runStatusLabel(run));
+  byId("run-dot").className = `status-dot ${run?.status || "idle"}`;
+  setText("provider-detail", run?.providerDisplayName || runtime.providerDisplayName);
+  setText("actual-model-detail", run?.actualModelId || runtime.actualModelId || "No model (simulation)");
+  setText("hardware-detail", run?.hardware || runtime.hardware);
+  setText("backend-detail", run?.backendEndpoint || runtime.backendEndpoint || "Not applicable");
   setText("endpoint", running ? `${window.location.origin}${run.endpoint}` : "Available after start");
-  setText("playground-title", running ? run.modelState.label : "No active state");
+  setText("playground-title", running ? run.actualModelId || run.modelState.label : "No active state");
+
+  const error = byId("run-error");
+  error.textContent = run?.error || "";
+  error.classList.toggle("hidden", !run?.error);
 
   const sameState = running && run.modelState.kind === state.runSelection;
-  setText("run-button", sameState ? "Restart simulation" : running ? "Start selected state" : "Start simulation");
+  const runButton = byId("run-button");
+  runButton.disabled = starting;
+  runButton.textContent = starting
+    ? "Starting runtime..."
+    : running && sameState
+      ? real ? "Restart real runtime" : "Restart simulation"
+      : running
+        ? "Start selected state"
+        : real ? "Start real runtime" : "Start simulation";
+
+  const stopButton = byId("stop-button");
+  stopButton.classList.toggle("hidden", !running);
+  stopButton.disabled = !running;
 
   const chatInput = byId("chat-input");
   const chatButton = document.querySelector("#chat-form button");
@@ -219,22 +299,43 @@ function renderRun() {
     resetPlayground("");
     messages.querySelector(".empty-state")?.remove();
     messages.dataset.runId = run.id;
-    appendMessage(
-      "assistant",
-      `The ${run.modelState.label} state is ready in simulation. No GLM-5.2 weights, training, or inference are running.`,
-      "Simulation"
-    );
+    if (run.realExecution) {
+      appendMessage(
+        "assistant",
+        `${run.actualModelId} is running through ${run.providerDisplayName}. This is genuine model inference from a development substitute, not GLM-5.2.`,
+        `${run.providerDisplayName} · ${run.actualModelId} · Real`
+      );
+    } else {
+      appendMessage(
+        "assistant",
+        `The ${run.modelState.label} state is ready in simulation. No GLM-5.2 weights, training, or inference are running.`,
+        "Simulation"
+      );
+    }
   } else if (!running && !messages.querySelector(".empty-state")) {
-    resetPlayground("Start a state to try the simulated playground.");
+    const message = run?.status === "failed"
+      ? "The runtime failed. Review the error and start it again."
+      : run?.status === "stopped"
+        ? "The runtime is stopped. Start it to use the playground."
+        : "Start a state to open the playground.";
+    resetPlayground(message);
   }
 }
 
 function renderAll() {
+  renderRuntimeIdentity();
   renderModelList();
   renderForkSource();
   renderSummary();
   renderSteps();
   renderRun();
+}
+
+async function refreshWorkspace() {
+  if (!state.workspace) return;
+  const { workspace } = await api(`/api/workspaces/${state.workspace.id}`);
+  state.workspace = workspace;
+  renderAll();
 }
 
 document.querySelectorAll(".step").forEach((button) => {
@@ -282,8 +383,8 @@ byId("adapt-form").addEventListener("submit", async (event) => {
       })
     });
     state.workspace = workspace;
-    state.runSelection = "adapted";
-    resetPlayground("Start a state to try the simulated playground.");
+    state.runSelection = state.runtime.supportsAdaptedState ? "adapted" : "base";
+    resetPlayground("Start a state to open the playground.");
     renderAll();
     openStage("run");
   } catch (error) {
@@ -293,9 +394,29 @@ byId("adapt-form").addEventListener("submit", async (event) => {
 
 byId("run-button").addEventListener("click", async () => {
   clearNotice();
-  const button = byId("run-button");
-  button.disabled = true;
-  button.textContent = "Starting simulation...";
+  const previousRun = state.workspace.run;
+  state.workspace.run = {
+    ...previousRun,
+    provider: state.runtime.provider,
+    providerDisplayName: state.runtime.providerDisplayName,
+    executionMode: state.runtime.executionMode,
+    realExecution: state.runtime.realExecution,
+    actualModelId: state.runtime.actualModelId,
+    hardware: state.runtime.hardware,
+    backendEndpoint: state.runtime.backendEndpoint,
+    status: "starting",
+    error: null,
+    modelState: {
+      kind: state.runSelection,
+      label: state.runSelection === "adapted"
+        ? state.workspace.adaptation.name
+        : state.runtime.actualModelId
+          ? `${state.runtime.actualModelId} development model`
+          : `${state.workspace.baseModel.name} base`
+    }
+  };
+  renderAll();
+
   try {
     const { workspace } = await api(`/api/workspaces/${state.workspace.id}/run`, {
       method: "POST",
@@ -305,15 +426,27 @@ byId("run-button").addEventListener("click", async () => {
     renderAll();
   } catch (error) {
     showNotice(error.message);
-    try {
-      const { workspace } = await api(`/api/workspaces/${state.workspace.id}`);
-      state.workspace = workspace;
-      renderAll();
-    } catch {
-      button.textContent = "Start simulation";
-    }
+    await refreshWorkspace().catch(() => {});
+  }
+});
+
+byId("stop-button").addEventListener("click", async () => {
+  clearNotice();
+  const button = byId("stop-button");
+  button.disabled = true;
+  button.textContent = "Stopping...";
+  try {
+    const { workspace } = await api(`/api/workspaces/${state.workspace.id}/stop`, {
+      method: "POST",
+      body: "{}"
+    });
+    state.workspace = workspace;
+    renderAll();
+  } catch (error) {
+    showNotice(error.message);
+    await refreshWorkspace().catch(() => {});
   } finally {
-    button.disabled = false;
+    button.textContent = "Stop runtime";
   }
 });
 
@@ -330,29 +463,42 @@ byId("chat-form").addEventListener("submit", async (event) => {
       method: "POST",
       body: JSON.stringify({ message })
     });
-    appendMessage("assistant", payload.message.content, "Simulated response");
+    const result = payload.message;
+    const label = result.realExecution
+      ? `${result.providerDisplayName} · ${result.actualModelId} · Real`
+      : "Simulated response";
+    appendMessage("assistant", result.content, label);
   } catch (error) {
     showNotice(error.message);
+    await refreshWorkspace().catch(() => {});
   }
 });
 
 async function loadApp() {
   try {
-    const [{ models }, { workspaces }] = await Promise.all([
+    const [{ models }, { workspaces }, health] = await Promise.all([
       api("/api/models"),
-      api("/api/workspaces")
+      api("/api/workspaces"),
+      api("/api/health")
     ]);
     state.models = models;
+    state.runtime = health.runtime;
 
-    const latest = [...workspaces].sort((a, b) => a.updatedAt.localeCompare(b.updatedAt)).at(-1);
+    let latest = [...workspaces].sort((a, b) => a.updatedAt.localeCompare(b.updatedAt)).at(-1);
+    if (latest?.run && ["starting", "running"].includes(latest.run.status)) {
+      const status = await api(`/api/workspaces/${latest.id}/run/status`);
+      latest = status.workspace;
+    }
+
     if (latest) {
       state.workspace = latest;
       state.model = models.find((model) => model.id === latest.baseModel.id) || null;
       state.runSelection = latest.run?.modelState?.kind || (latest.adaptation ? "adapted" : "base");
+      if (!state.runtime.supportsAdaptedState) state.runSelection = "base";
     }
 
     renderAll();
-    if (latest?.run?.status === "running" || latest?.adaptation) openStage("run");
+    if (latest?.run || latest?.adaptation) openStage("run");
     else if (latest) openStage("adapt");
     else openStage("choose");
   } catch (error) {

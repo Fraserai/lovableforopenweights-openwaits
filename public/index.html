@@ -13,7 +13,9 @@
       <span class="brand-mark">OW</span>
       <span>OpenWeight</span>
     </a>
-    <div class="environment-badge"><span></span> Simulation environment</div>
+    <div id="environment-badge" class="environment-badge">
+      <span></span><span id="environment-label">Simulation environment</span>
+    </div>
   </header>
 
   <main class="workspace-shell">
@@ -49,7 +51,7 @@
           <div><dt>Fork</dt><dd id="fork-state">Not created</dd></div>
           <div><dt>Adaptation</dt><dd id="adaptation-state">Not requested</dd></div>
           <div><dt>Active state</dt><dd id="active-state">Not started</dd></div>
-          <div><dt>Execution</dt><dd id="execution-state" class="simulation-text">Simulation</dd></div>
+          <div><dt>Execution</dt><dd id="execution-state">Not started</dd></div>
         </dl>
       </section>
     </aside>
@@ -109,11 +111,16 @@
             <h2 id="run-title">Run a model state</h2>
             <span>Choose the immutable base or your adaptation specification.</span>
           </div>
-          <strong class="simulation-flag">Simulated output</strong>
+          <strong id="execution-flag" class="execution-flag simulation">Simulated output</strong>
         </header>
 
         <div class="run-layout">
           <section class="run-controls" aria-label="Run controls">
+            <div id="runtime-identity" class="runtime-identity">
+              <small>Actual execution target</small>
+              <strong id="actual-model-banner">No model loaded</strong>
+              <span id="runtime-identity-note">Simulation only</span>
+            </div>
             <fieldset class="state-picker">
               <legend>State to start</legend>
               <label>
@@ -134,15 +141,21 @@
               <span id="run-dot" class="status-dot"></span>
               <div><small>Execution status</small><strong id="run-status">Not started</strong></div>
             </div>
-            <button id="run-button" class="primary" type="button">Start simulation</button>
+            <p id="run-error" class="run-error hidden"></p>
+            <div class="runtime-actions">
+              <button id="run-button" class="primary" type="button">Start simulation</button>
+              <button id="stop-button" class="secondary hidden" type="button">Stop runtime</button>
+            </div>
 
             <details class="technical-details">
               <summary>Technical details</summary>
               <dl>
                 <div><dt>Base revision</dt><dd><code id="base-revision">-</code></dd></div>
                 <div><dt>Provider</dt><dd id="provider-detail">Mock compute</dd></div>
+                <div><dt>Actual model</dt><dd><code id="actual-model-detail">No model</code></dd></div>
                 <div><dt>Hardware</dt><dd id="hardware-detail">Simulated GPU</dd></div>
                 <div><dt>Endpoint</dt><dd><code id="endpoint">Available after start</code></dd></div>
+                <div><dt>Backend</dt><dd><code id="backend-detail">Not applicable</code></dd></div>
               </dl>
             </details>
           </section>
@@ -153,10 +166,10 @@
                 <small>Playground</small>
                 <strong id="playground-title">No active state</strong>
               </div>
-              <span>Simulation</span>
+              <span id="playground-mode">Simulation</span>
             </header>
             <div id="messages" class="messages" aria-live="polite">
-              <p class="empty-state">Start a state to try the simulated playground.</p>
+              <p class="empty-state">Start a state to open the playground.</p>
             </div>
             <form id="chat-form" class="composer">
               <label class="sr-only" for="chat-input">Message</label>

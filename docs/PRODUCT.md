@@ -25,6 +25,7 @@ Change the fork for a domain, task, behaviour, architecture, or deployment targe
 ### Run
 
 Load a chosen model state onto compute and make inference usable through a playground and API.
+When development hardware runs a substitute, the workspace must show both the chosen lineage model and the actual executing model.
 
 ## Non-goals
 
