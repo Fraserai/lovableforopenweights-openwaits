@@ -468,8 +468,8 @@ function addExample(example = {}) {
   const index = list.children.length + 1;
   row.innerHTML = `
     <div class="example-head"><strong>Example ${index}</strong><button class="remove-example" type="button">Remove</button></div>
-    <label>User message<input class="example-user" maxlength="4000" required></label>
-    <label>Ideal response<textarea class="example-assistant" maxlength="8000" required></textarea></label>
+    <label class="example-field user-field"><span><b>U</b>User message</span><input class="example-user" maxlength="4000" required></label>
+    <label class="example-field assistant-field"><span><b>A</b>Ideal response</span><textarea class="example-assistant" maxlength="8000" required></textarea></label>
   `;
   row.querySelector(".example-user").value = example.user || "";
   row.querySelector(".example-assistant").value = example.assistant || "";
@@ -488,6 +488,7 @@ function addExample(example = {}) {
 function renderExampleCount() {
   const count = byId("examples-list").children.length;
   setText("examples-count", `${count} of 20`);
+  setText("examples-readiness", count === 20 ? "Example set full" : "Ready to fine-tune");
   byId("add-example").disabled = count >= 20;
   document.querySelectorAll(".remove-example").forEach((button) => {
     button.disabled = count <= 5;
