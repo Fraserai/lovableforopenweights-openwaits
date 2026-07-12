@@ -59,7 +59,7 @@ function stageIsUnlocked(stage) {
 function stageIsComplete(stage) {
   if (stage === "choose") return Boolean(state.model);
   if (stage === "fork") return Boolean(state.workspace);
-  if (stage === "adapt") return ["complete", "specification-created"].includes(state.workspace?.adaptation?.status);
+  if (stage === "adapt") return ["complete", "simulated"].includes(fineTuneOf(state.workspace)?.status);
   return state.workspace?.run?.status === "running";
 }
 
@@ -75,12 +75,11 @@ function runStatusLabel(run) {
 }
 
 function renderSteps() {
+  const fineTune = fineTuneOf(state.workspace);
   const statuses = {
     choose: state.model?.name || "Not chosen",
     fork: state.workspace?.name || "Not created",
-    adapt: state.workspace?.adaptation
-      ? `${state.workspace.adaptation.name} · ${adaptationStatusLabel(state.workspace.adaptation.status)}`
-      : "Not requested",
+    adapt: fineTune ? `${fineTune.name} · ${fineTuneStatusLabel(fineTune.status)}` : "Not started",
     run: runStatusLabel(state.workspace?.run)
   };
 
@@ -97,13 +96,22 @@ function shortRevision(revision) {
   return revision ? revision.slice(0, 9) : "unavailable";
 }
 
-function adaptationStatusLabel(status) {
+function fineTuneOf(workspace) {
+  return workspace?.fineTune || workspace?.adaptation || null;
+}
+
+function fineTuneStatusLabel(status) {
   return {
-    "specification-created": "Specification created",
-    training: "Training",
+    preparing: "Preparing",
+    uploading: "Uploading securely",
+    queued: "Queued",
+    training: "Fine-tuning",
+    publishing: "Publishing",
     complete: "Complete",
-    failed: "Failed"
-  }[status] || "Not requested";
+    failed: "Failed",
+    cancelled: "Cancelled",
+    simulated: "Simulated"
+  }[status] || "Not started";
 }
 
 function renderRuntimeIdentity() {
@@ -113,21 +121,26 @@ function renderRuntimeIdentity() {
   const badge = byId("environment-badge");
   badge.classList.toggle("real", real);
   badge.classList.toggle("simulation", !real);
+  const managed = runtime.provider === "together";
   setText(
     "environment-label",
-    real ? `Real local runtime · ${runtime.providerDisplayName}` : "Simulation environment"
+    managed
+      ? `Managed cloud compute · ${runtime.providerDisplayName}`
+      : real ? `Internal runtime · ${runtime.providerDisplayName}` : "Explicit test simulation"
   );
 
   const flag = byId("execution-flag");
   flag.classList.toggle("real", real);
   flag.classList.toggle("simulation", !real);
-  flag.textContent = real ? "Real development output" : "Simulated output";
+  flag.textContent = managed ? "Real cloud output" : real ? "Real internal output" : "Simulated output";
 
   setText("actual-model-banner", real ? runtime.actualModelId : "No model loaded");
   setText(
     "runtime-identity-note",
-    real
-      ? `Real via ${runtime.providerDisplayName}; ${runtime.actualModelId}`
+    managed
+      ? `Managed by ${runtime.providerDisplayName}; no local setup required`
+      : real
+        ? `Internal development provider · ${runtime.providerDisplayName}`
       : "No model inference; responses are simulated"
   );
   const playgroundMode = byId("playground-mode");
@@ -194,16 +207,26 @@ function renderForkSource() {
   const model = document.createElement("strong");
   model.textContent = state.model.name;
   const details = document.createElement("div");
-  details.textContent = `Source ${state.model.id} at ${shortRevision(state.model.revision)}. The base reference remains immutable.`;
+  details.textContent = state.model.revision
+    ? `Source ${state.model.id} at ${shortRevision(state.model.revision)}. The base reference remains immutable.`
+    : `Source ${state.model.id}. Together does not expose an exact revision; the provider identity remains immutable.`;
   source.append(model, details);
 }
 
 function renderSummary() {
   const workspace = state.workspace;
+  const fineTune = fineTuneOf(workspace);
   const run = workspace?.run;
-  setText("chosen-model-state", state.model ? `${state.model.name} @ ${shortRevision(state.model.revision)}` : "None");
+  setText(
+    "chosen-model-state",
+    state.model
+      ? state.model.revision
+        ? `${state.model.name} @ ${shortRevision(state.model.revision)}`
+        : `${state.model.name} · revision unavailable`
+      : "None"
+  );
   setText("fork-state", workspace?.name || "Not created");
-  setText("adaptation-state", workspace?.adaptation?.objective || "Not requested");
+  setText("adaptation-state", fineTune?.objective || "Not started");
   setText(
     "active-state",
     run?.status === "running" || run?.status === "starting"
@@ -219,7 +242,7 @@ function renderSummary() {
 }
 
 function renderAdaptation() {
-  const adaptation = state.workspace?.adaptation;
+  const adaptation = fineTuneOf(state.workspace);
   const progress = byId("adaptation-progress");
   progress.classList.toggle("hidden", !adaptation);
   if (!adaptation) return;
@@ -234,33 +257,45 @@ function renderAdaptation() {
     while (byId("examples-list").children.length < 5) addExample();
   }
 
-  setText("adaptation-status", adaptationStatusLabel(adaptation.status));
+  setText("adaptation-status", fineTuneStatusLabel(adaptation.status));
   setText(
     "adaptation-status-note",
-    adaptation.status === "training"
-      ? "Your examples are being learned locally. You can leave this screen open."
+    adaptation.status === "preparing"
+      ? "Preparing your examples…"
+      : adaptation.status === "uploading"
+        ? "Uploading securely…"
+        : adaptation.status === "queued"
+          ? "Your fine-tune is queued with the managed provider."
+          : adaptation.status === "training"
+            ? "Fine-tuning your model in the cloud. You can safely reload this page."
+            : adaptation.status === "publishing"
+              ? "Publishing your model…"
       : adaptation.status === "complete"
-        ? `${adaptation.exampleCount} examples produced a real adapter.`
+        ? `${adaptation.exampleCount} examples produced a real fine-tuned model.`
         : adaptation.status === "failed"
-          ? adaptation.error || "Training failed. Update the request and try again."
-          : "The request is saved; no real training ran in this environment."
+          ? adaptation.error || "Fine-tuning failed. Update the examples and try again."
+          : adaptation.status === "simulated"
+            ? "Simulation only: no cloud fine-tuning ran."
+            : "Waiting for the managed provider."
   );
-  setText("adaptation-backend", adaptation.trainingBackend || "Not run (simulation)");
-  setText("adaptation-revision", adaptation.baseRevision || state.workspace.baseModel.revision);
-  setText("adaptation-path", adaptation.adapterPath || "Not created");
+  setText("adaptation-backend", adaptation.provider || adaptation.trainingBackend || "Simulation");
+  setText("adaptation-revision", adaptation.baseRevision || "Unavailable from provider");
+  setText("adaptation-path", adaptation.outputModelId || adaptation.fineTuneJobId || "Not published");
   const config = adaptation.configuration;
   setText(
     "adaptation-config",
     config
-      ? `${config.iterations} steps · ${config.numLayers} layers · batch ${config.batchSize}`
+      ? config.trainingType
+        ? `${config.trainingType} · ${config.epochs} epoch · rank ${config.loraRank}`
+        : `${config.iterations} steps · ${config.numLayers} layers · batch ${config.batchSize}`
       : "Not applicable"
   );
-  setText("adaptation-logs", adaptation.logs || "No training logs yet");
+  setText("adaptation-logs", adaptation.error || adaptation.logs || "Provider progress is available while the job runs.");
 
-  const training = adaptation.status === "training";
-  byId("adapt-button").disabled = training;
-  byId("adapt-button").textContent = training ? "Adaptation training..." : "Start adaptation";
-  scheduleAdaptationPoll(training);
+  const active = ["preparing", "uploading", "queued", "training", "publishing"].includes(adaptation.status);
+  byId("adapt-button").disabled = active;
+  byId("adapt-button").textContent = active ? "Fine-tuning…" : "Fine-tune";
+  scheduleAdaptationPoll(active);
 }
 
 function scheduleAdaptationPoll(training) {
@@ -272,7 +307,7 @@ function scheduleAdaptationPoll(training) {
   if (state.adaptationPoll) return;
   state.adaptationPoll = setTimeout(async () => {
     state.adaptationPoll = null;
-    await refreshWorkspace().catch((error) => showNotice(error.message));
+    await refreshFineTune().catch((error) => showNotice(error.message));
   }, 1_000);
 }
 
@@ -305,30 +340,36 @@ function renderRun() {
   const runtime = state.runtime;
   if (!workspace || !runtime) return;
 
-  setText("base-revision", workspace.baseModel.revision);
-  setText("base-state-label", `${workspace.baseModel.name} @ ${shortRevision(workspace.baseModel.revision)}`);
-  const adaptedInput = document.querySelector('input[name="model-state"][value="adapted"]');
-  const adaptedRunnable = Boolean(workspace.adaptation) && runtime.supportsAdaptedState &&
-    (!runtime.realExecution || workspace.adaptation.status === "complete");
+  const fineTune = fineTuneOf(workspace);
+  setText("base-revision", workspace.baseModel.revision || "Unavailable from provider");
+  setText(
+    "base-state-label",
+    workspace.baseModel.revision
+      ? `${workspace.baseModel.name} @ ${shortRevision(workspace.baseModel.revision)}`
+      : `${workspace.baseModel.name} · provider revision unavailable`
+  );
+  const adaptedInput = document.querySelector('input[name="model-state"][value="fine-tuned"]');
+  const adaptedRunnable = Boolean(fineTune) && runtime.supportsAdaptedState &&
+    (!runtime.realExecution || fineTune.status === "complete");
   adaptedInput.disabled = !adaptedRunnable;
   setText(
     "adapted-state-label",
-    !workspace.adaptation
-      ? "Create an adaptation first"
-      : workspace.adaptation.status === "training"
-        ? "Training in progress"
-        : workspace.adaptation.status === "failed"
-          ? "Training failed"
+    !fineTune
+      ? "Fine-tune your fork first"
+      : ["preparing", "uploading", "queued", "training", "publishing"].includes(fineTune.status)
+        ? fineTuneStatusLabel(fineTune.status)
+        : fineTune.status === "failed"
+          ? "Fine-tuning failed"
           : adaptedRunnable
-        ? workspace.adaptation.name
-        : "No runnable adapter"
+            ? fineTune.name
+            : "No runnable fine-tuned model"
   );
   setText(
     "adaptation-objective-summary",
-    workspace.adaptation?.objective || "No adaptation requested. The base state is available."
+    fineTune?.objective || "No fine-tune started. The base state is available."
   );
 
-  if (state.runSelection === "adapted" && !adaptedRunnable) state.runSelection = "base";
+  if (state.runSelection === "fine-tuned" && !adaptedRunnable) state.runSelection = "base";
   document.querySelectorAll('input[name="model-state"]').forEach((input) => {
     input.checked = input.value === state.runSelection;
   });
@@ -378,16 +419,27 @@ function renderRun() {
     if (run.realExecution) {
       appendMessage(
         "assistant",
-        `${run.modelState.label} is running through ${run.providerDisplayName}. This is genuine inference from ${run.actualModelId}.`,
+        `${run.modelState.label} is ready through ${run.providerDisplayName}. This is genuine inference from ${run.actualModelId}.`,
         `${run.providerDisplayName} · ${run.actualModelId} · Real`
       );
     } else {
       appendMessage(
         "assistant",
-        `The ${run.modelState.label} state is ready in simulation. No model weights, training, or inference are running.`,
+        `The ${run.modelState.label} state is ready in simulation. No cloud fine-tuning or inference is running.`,
         "Simulation"
       );
     }
+    (run.conversation || []).forEach((message) => {
+      appendMessage(
+        message.role === "assistant" ? "assistant" : "user",
+        message.content,
+        message.role === "assistant"
+          ? run.realExecution
+            ? `${run.providerDisplayName} · ${run.actualModelId} · Real`
+            : "Simulated response"
+          : "You"
+      );
+    });
   } else if (!running && !messages.querySelector(".empty-state")) {
     const message = run?.status === "failed"
       ? "The runtime failed. Review the error and start it again."
@@ -448,6 +500,13 @@ async function refreshWorkspace() {
   renderAll();
 }
 
+async function refreshFineTune() {
+  if (!state.workspace) return;
+  const { workspace } = await api(`/api/workspaces/${state.workspace.id}/fine-tune/status`);
+  state.workspace = workspace;
+  renderAll();
+}
+
 document.querySelectorAll(".step").forEach((button) => {
   button.addEventListener("click", () => {
     if (!button.disabled) openStage(button.dataset.stage);
@@ -484,22 +543,48 @@ byId("fork-form").addEventListener("submit", async (event) => {
 byId("adapt-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   clearNotice();
+  const examples = collectExamples();
+  const request = api(`/api/workspaces/${state.workspace.id}/fine-tune`, {
+    method: "POST",
+    body: JSON.stringify({
+      name: byId("adapt-name").value,
+      objective: byId("adapt-objective").value,
+      examples
+    })
+  });
+  state.workspace.fineTune = {
+    id: "submitting",
+    name: byId("adapt-name").value,
+    objective: byId("adapt-objective").value,
+    examples,
+    exampleCount: examples.length,
+    status: "preparing",
+    provider: state.runtime.provider
+  };
+  renderAll();
+  const submissionPoll = setInterval(async () => {
+    try {
+      const { workspace } = await api(`/api/workspaces/${state.workspace.id}`);
+      if (fineTuneOf(workspace)) {
+        state.workspace = workspace;
+        renderAll();
+      }
+    } catch {}
+  }, 500);
   try {
-    const { workspace } = await api(`/api/workspaces/${state.workspace.id}/adapt`, {
-      method: "POST",
-      body: JSON.stringify({
-        name: byId("adapt-name").value,
-        objective: byId("adapt-objective").value,
-        examples: collectExamples()
-      })
-    });
+    const { workspace } = await request;
     state.workspace = workspace;
-    state.runSelection = state.runtime.realExecution ? "base" : "adapted";
+    state.runSelection = state.runtime.realExecution ? "base" : "fine-tuned";
     resetPlayground("Start a state to open the playground.");
     renderAll();
-    openStage("run");
+    if (["complete", "simulated"].includes(fineTuneOf(workspace)?.status)) openStage("run");
   } catch (error) {
     showNotice(error.message);
+    if (error.payload?.workspace) state.workspace = error.payload.workspace;
+    else await refreshWorkspace().catch(() => {});
+    renderAll();
+  } finally {
+    clearInterval(submissionPoll);
   }
 });
 
@@ -519,8 +604,8 @@ byId("run-button").addEventListener("click", async () => {
     error: null,
     modelState: {
       kind: state.runSelection,
-      label: state.runSelection === "adapted"
-        ? state.workspace.adaptation.name
+      label: state.runSelection === "fine-tuned"
+        ? fineTuneOf(state.workspace).name
         : state.runtime.actualModelId
           ? `${state.runtime.actualModelId} development model`
           : `${state.workspace.baseModel.name} base`
@@ -596,6 +681,10 @@ async function loadApp() {
     state.runtime = health.runtime;
 
     let latest = [...workspaces].sort((a, b) => a.updatedAt.localeCompare(b.updatedAt)).at(-1);
+    if (latest?.fineTune && ["queued", "training", "publishing"].includes(latest.fineTune.status)) {
+      const status = await api(`/api/workspaces/${latest.id}/fine-tune/status`);
+      latest = status.workspace;
+    }
     if (latest?.run && ["starting", "running"].includes(latest.run.status)) {
       const status = await api(`/api/workspaces/${latest.id}/run/status`);
       latest = status.workspace;
@@ -604,12 +693,12 @@ async function loadApp() {
     if (latest) {
       state.workspace = latest;
       state.model = models.find((model) => model.id === latest.baseModel.id) || null;
-      state.runSelection = latest.run?.modelState?.kind || (latest.adaptation ? "adapted" : "base");
+      state.runSelection = latest.run?.modelState?.kind || (fineTuneOf(latest) ? "fine-tuned" : "base");
       if (!state.runtime.supportsAdaptedState) state.runSelection = "base";
     }
 
     renderAll();
-    if (latest?.run || latest?.adaptation) openStage("run");
+    if (latest?.run || fineTuneOf(latest)) openStage("run");
     else if (latest) openStage("adapt");
     else openStage("choose");
   } catch (error) {

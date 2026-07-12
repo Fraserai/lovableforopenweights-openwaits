@@ -2,7 +2,7 @@ import http from "node:http";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { MODEL_CATALOG, getModel } from "./lib/model-catalog.mjs";
+import { MODEL_CATALOG, TOGETHER_MODEL_CANDIDATES, getModel } from "./lib/model-catalog.mjs";
 import {
   createWorkspace,
   getWorkspace,
@@ -18,8 +18,8 @@ const compute = createComputeProvider();
 const adaptationTrainer = compute.name === "mlx"
   ? new MlxAdaptationTrainer({
       modelPath: process.env.MLX_MODEL_PATH,
-      modelId: MODEL_CATALOG[0].id,
-      modelRevision: MODEL_CATALOG[0].revision,
+      modelId: compute.modelId,
+      modelRevision: compute.modelRevision,
       artifactsRoot: process.env.MLX_ARTIFACTS_PATH || path.resolve("data/artifacts"),
       loraCommand: process.env.MLX_LORA_COMMAND,
       iterations: Number(process.env.MLX_TRAIN_ITERS || 20),
@@ -28,6 +28,7 @@ const adaptationTrainer = compute.name === "mlx"
     })
   : null;
 const port = Number(process.env.PORT || 3000);
+let managedModel = null;
 
 const contentTypes = {
   ".html": "text/html; charset=utf-8",
@@ -61,25 +62,27 @@ function routeMatch(pathname, pattern) {
 }
 
 function inactivePhase(workspace) {
-  return workspace.adaptation ? "adapted" : "forked";
+  return workspace.fineTune || workspace.adaptation ? "fine-tuned" : "forked";
 }
 
 function selectedModelState(workspace, kind) {
-  if (kind === "adapted") {
+  if (kind === "fine-tuned") {
+    const fineTune = workspace.fineTune || workspace.adaptation;
     return {
       kind,
-      label: workspace.adaptation.name,
-      adaptationId: workspace.adaptation.id
+      label: fineTune.name,
+      fineTuneId: fineTune.id
     };
   }
   return {
     kind: "base",
     label: `${workspace.baseModel.name} base`,
-    adaptationId: null
+    fineTuneId: null
   };
 }
 
 function runtimeDescription() {
+  if (typeof compute.runtimeDescription === "function") return compute.runtimeDescription();
   return {
     provider: compute.name,
     providerDisplayName: compute.displayName,
@@ -87,7 +90,7 @@ function runtimeDescription() {
     realExecution: compute.realExecution,
     actualModelId: compute.actualModelId,
     supportsAdaptedState: compute.supportsAdaptedState,
-    supportsRealAdaptation: Boolean(adaptationTrainer),
+    supportsRealFineTuning: Boolean(adaptationTrainer),
     backendEndpoint: compute.baseUrl || null,
     hardware: compute.hardware
   };
@@ -103,7 +106,39 @@ async function handleApi(request, response, url) {
   }
 
   if (request.method === "GET" && url.pathname === "/api/models") {
-    return sendJson(response, 200, { models: MODEL_CATALOG });
+    if (compute.name !== "together") return sendJson(response, 200, { models: MODEL_CATALOG });
+    try {
+      let preflight;
+      let lastError;
+      for (const candidate of TOGETHER_MODEL_CANDIDATES) {
+        try {
+          preflight = await compute.preflightModel(candidate.providerModelId);
+          managedModel = candidate;
+          break;
+        } catch (error) {
+          if (error.status !== 409) throw error;
+          lastError = error;
+        }
+      }
+      if (!managedModel) throw lastError || new Error("No Together Qwen model passed preflight");
+      compute.modelId = managedModel.providerModelId;
+      compute.actualModelId = managedModel.providerModelId;
+      return sendJson(response, 200, {
+        models: [{
+          ...managedModel,
+          status: "supported",
+          deployment: {
+            provider: "together",
+            serverlessBase: preflight.serverless,
+            compatibleHardwareCount: preflight.hardware.length
+          }
+        }]
+      });
+    } catch (error) {
+      return sendJson(response, error.status || 503, {
+        error: `The managed model is not currently deployable: ${error.message}`
+      });
+    }
   }
 
   if (request.method === "GET" && url.pathname === "/api/workspaces") {
@@ -112,7 +147,9 @@ async function handleApi(request, response, url) {
 
   if (request.method === "POST" && url.pathname === "/api/workspaces") {
     const body = await readJson(request);
-    const model = getModel(body.modelId);
+    const model = compute.name === "together" && managedModel?.id === body.modelId
+      ? managedModel
+      : getModel(body.modelId);
     if (!model) return sendJson(response, 404, { error: "Model is not supported" });
     const name = String(body.name || `My ${model.name}`).trim().slice(0, 80);
     const workspace = await createWorkspace({ model, name });
@@ -126,15 +163,73 @@ async function handleApi(request, response, url) {
     return sendJson(response, 200, { workspace });
   }
 
-  params = routeMatch(url.pathname, /^\/api\/workspaces\/(?<id>[^/]+)\/adapt$/);
+  params = routeMatch(url.pathname, /^\/api\/workspaces\/(?<id>[^/]+)\/fine-tune$/);
   if (request.method === "POST" && params) {
     const body = await readJson(request);
     const current = await getWorkspace(params.id);
     if (!current) return sendJson(response, 404, { error: "Workspace not found" });
 
-    const name = String(body.name || "My adaptation").trim().slice(0, 80);
+    const name = String(body.name || "My fine-tune").trim().slice(0, 80);
     const objective = String(body.objective || "").trim().slice(0, 1000);
-    if (!objective) return sendJson(response, 400, { error: "Adaptation objective is required" });
+    if (!objective) return sendJson(response, 400, { error: "Fine-tuning objective is required" });
+
+    if (compute.name === "together") {
+      let fineTune;
+      try {
+        fineTune = await compute.prepareFineTune({
+          workspace: current,
+          name,
+          objective,
+          examples: body.examples
+        });
+        await updateWorkspace(params.id, (workspace) => ({
+          ...workspace,
+          phase: "fine-tuning",
+          fineTune,
+          adaptation: null,
+          run: null
+        }));
+        await updateWorkspace(params.id, (workspace) => ({
+          ...workspace,
+          fineTune: { ...workspace.fineTune, status: "uploading", startedAt: new Date().toISOString() }
+        }));
+        const file = await compute.uploadTrainingFile(fineTune.datasetPath);
+        await updateWorkspace(params.id, (workspace) => ({
+          ...workspace,
+          fineTune: { ...workspace.fineTune, providerFileId: file.id, status: "queued" }
+        }));
+        const job = await compute.createFineTune({ fileId: file.id, workspace: current, adaptation: fineTune });
+        const providerState = await compute.getFineTune(job.id);
+        const workspace = await updateWorkspace(params.id, (workspace) => ({
+          ...workspace,
+          phase: "fine-tuning",
+          fineTune: {
+            ...workspace.fineTune,
+            fineTuneJobId: job.id,
+            providerStatus: job.status,
+            status: providerState.status,
+            outputModelId: providerState.outputModelId,
+            startedAt: providerState.startedAt || workspace.fineTune.startedAt
+          }
+        }));
+        return sendJson(response, 202, { workspace });
+      } catch (error) {
+        const workspace = await updateWorkspace(params.id, (workspace) => ({
+          ...workspace,
+          phase: "fine-tune-failed",
+          fineTune: {
+            ...(workspace.fineTune || fineTune),
+            status: "failed",
+            error: error.message || "Managed fine-tuning failed",
+            completedAt: new Date().toISOString()
+          }
+        }));
+        return sendJson(response, error.status || 503, {
+          error: error.message || "Managed fine-tuning failed",
+          workspace
+        });
+      }
+    }
 
     if (adaptationTrainer) {
       let training;
@@ -150,21 +245,21 @@ async function handleApi(request, response, url) {
       }
       const workspace = await updateWorkspace(params.id, (workspace) => ({
         ...workspace,
-        phase: "adapting",
-        adaptation: training.adaptation,
+        phase: "fine-tuning",
+        fineTune: training.adaptation,
         run: null
       }));
       training.completion.then(
         (completed) => updateWorkspace(params.id, (latest) => ({
           ...latest,
-          phase: "adapted",
-          adaptation: completed
+          phase: "fine-tuned",
+          fineTune: completed
         })),
         (error) => updateWorkspace(params.id, (latest) => ({
           ...latest,
-          phase: "adaptation-failed",
-          adaptation: {
-            ...latest.adaptation,
+          phase: "fine-tune-failed",
+          fineTune: {
+            ...latest.fineTune,
             status: "failed",
             completedAt: new Date().toISOString(),
             error: error.message || "MLX-LM training failed",
@@ -177,15 +272,15 @@ async function handleApi(request, response, url) {
 
     const workspace = await updateWorkspace(params.id, (workspace) => ({
       ...workspace,
-      phase: "adapted",
-      adaptation: {
+      phase: "fine-tuned",
+      fineTune: {
         id: randomId(),
         name,
         method: "lora",
         objective,
         examples: Array.isArray(body.examples) ? body.examples : [],
         exampleCount: Array.isArray(body.examples) ? body.examples.length : 0,
-        status: "specification-created",
+        status: "simulated",
         trainingBackend: null,
         createdAt: new Date().toISOString()
       },
@@ -194,26 +289,74 @@ async function handleApi(request, response, url) {
     return sendJson(response, 200, { workspace });
   }
 
+  params = routeMatch(url.pathname, /^\/api\/workspaces\/(?<id>[^/]+)\/fine-tune\/status$/);
+  if (request.method === "GET" && params) {
+    let current = await getWorkspace(params.id);
+    if (!current) return sendJson(response, 404, { error: "Workspace not found" });
+    if (compute.name !== "together" || !current.fineTune) {
+      return sendJson(response, 200, { workspace: current });
+    }
+    try {
+      if (!current.fineTune.fineTuneJobId && current.fineTune.providerFileId) {
+        const job = await compute.createFineTune({
+          fileId: current.fineTune.providerFileId,
+          workspace: current,
+          adaptation: current.fineTune
+        });
+        current = await updateWorkspace(params.id, (workspace) => ({
+          ...workspace,
+          fineTune: {
+            ...workspace.fineTune,
+            fineTuneJobId: job.id,
+            providerStatus: job.status,
+            status: "queued"
+          }
+        }));
+      }
+      if (!current.fineTune.fineTuneJobId) {
+        return sendJson(response, 200, { workspace: current });
+      }
+      const providerState = await compute.getFineTune(current.fineTune.fineTuneJobId);
+      const status = providerState.status === "complete" && !providerState.outputModelId
+        ? "publishing"
+        : providerState.status;
+      const workspace = await updateWorkspace(params.id, (workspace) => ({
+        ...workspace,
+        phase: status === "complete" ? "fine-tuned" : status === "failed" ? "fine-tune-failed" : "fine-tuning",
+        fineTune: {
+          ...workspace.fineTune,
+          ...providerState,
+          status,
+          outputModelId: providerState.outputModelId || workspace.fineTune.outputModelId
+        }
+      }));
+      return sendJson(response, 200, { workspace });
+    } catch (error) {
+      return sendJson(response, error.status || 503, { error: error.message });
+    }
+  }
+
   params = routeMatch(url.pathname, /^\/api\/workspaces\/(?<id>[^/]+)\/run$/);
   if (request.method === "POST" && params) {
     const body = await readJson(request);
     const current = await getWorkspace(params.id);
     if (!current) return sendJson(response, 404, { error: "Workspace not found" });
     const modelState = body.modelState || "base";
-    if (!["base", "adapted"].includes(modelState)) {
-      return sendJson(response, 400, { error: "Model state must be base or adapted" });
+    if (!["base", "fine-tuned"].includes(modelState)) {
+      return sendJson(response, 400, { error: "Model state must be base or fine-tuned" });
     }
-    if (modelState === "adapted" && !current.adaptation) {
-      return sendJson(response, 409, { error: "Create an adaptation before running the adapted state" });
+    const fineTune = current.fineTune || current.adaptation;
+    if (modelState === "fine-tuned" && !fineTune) {
+      return sendJson(response, 409, { error: "Fine-tune the fork before running the fine-tuned state" });
     }
-    if (modelState === "adapted" && compute.realExecution && current.adaptation.status !== "complete") {
+    if (modelState === "fine-tuned" && compute.realExecution && fineTune.status !== "complete") {
       return sendJson(response, 409, {
-        error: "Real adaptation training must complete before starting the adapted state"
+        error: "Real fine-tuning must complete before starting the fine-tuned state"
       });
     }
-    if (modelState === "adapted" && !compute.supportsAdaptedState) {
+    if (modelState === "fine-tuned" && !compute.supportsAdaptedState) {
       return sendJson(response, 409, {
-        error: `${compute.displayName} cannot run the adapted state because no trained adapter exists`
+        error: `${compute.displayName} cannot run the fine-tuned state`
       });
     }
 
@@ -236,10 +379,21 @@ async function handleApi(request, response, url) {
     }));
 
     try {
+      const providerModelState = compute.name === "together"
+        ? modelState
+        : modelState === "fine-tuned" ? "adapted" : "base";
       const run = await compute.start({
         workspace: startingWorkspace,
-        modelState,
-        runId: startingRun.id
+        modelState: providerModelState,
+        runId: startingRun.id,
+        onEndpointCreated: compute.name === "together"
+          ? async (endpoint) => {
+              await updateWorkspace(params.id, (workspace) => ({
+                ...workspace,
+                run: { ...workspace.run, ...endpoint, status: "starting" }
+              }));
+            }
+          : undefined
       });
       const workspace = await updateWorkspace(params.id, (workspace) => ({
         ...workspace,
@@ -291,7 +445,9 @@ async function handleApi(request, response, url) {
       const status = await compute.getStatus({ workspace: current });
       const workspace = await updateWorkspace(params.id, (workspace) => ({
         ...workspace,
-        phase: status.status === "running" ? "running" : inactivePhase(workspace),
+        phase: status.status === "running"
+          ? "running"
+          : status.status === "starting" ? "starting" : inactivePhase(workspace),
         run: { ...workspace.run, ...status, error: null }
       }));
       return sendJson(response, 200, { workspace });
@@ -363,8 +519,20 @@ async function handleApi(request, response, url) {
     const message = String(body.message || "").trim().slice(0, 4000);
     if (!message) return sendJson(response, 400, { error: "Message is required" });
     try {
+      const history = Array.isArray(workspace.run.conversation)
+        ? workspace.run.conversation.slice(-18)
+        : [];
+      const messages = [...history, { role: "user", content: message }];
+      const assistant = await compute.chat({ workspace, message, messages });
+      await updateWorkspace(params.id, (current) => ({
+        ...current,
+        run: {
+          ...current.run,
+          conversation: [...messages, { role: "assistant", content: assistant.content }].slice(-20)
+        }
+      }));
       return sendJson(response, 200, {
-        message: await compute.chat({ workspace, message })
+        message: assistant
       });
     } catch (error) {
       await updateWorkspace(params.id, (current) => ({

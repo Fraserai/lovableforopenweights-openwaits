@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "A focused vertical slice for Choose → Fork → Adapt → Run with open-weight models.",
+  "description": "A managed Choose → Fork → Fine-tune → Run workspace for open-weight models.",
   "scripts": {
     "dev": "node --watch server.mjs",
     "start": "node server.mjs",
@@ -11,5 +11,8 @@
   },
   "engines": {
     "node": ">=20"
+  },
+  "dependencies": {
+    "together-ai": "0.40.0"
   }
 }

@@ -5,9 +5,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { prepareExamples, validateExamples } from "../lib/adaptation/examples.mjs";
 import { MlxAdaptationTrainer } from "../lib/adaptation/mlx-trainer.mjs";
-import { MODEL_CATALOG } from "../lib/model-catalog.mjs";
-
-const model = MODEL_CATALOG[0];
+const model = {
+  id: "mlx-community/Qwen3-0.6B-4bit",
+  name: "Qwen3 0.6B",
+  revision: "73e3e38d981303bc594367cd910ea6eb48349da8"
+};
 const examples = Array.from({ length: 5 }, (_, index) => ({
   user: `Question ${index + 1}`,
   assistant: `Ideal answer ${index + 1}`

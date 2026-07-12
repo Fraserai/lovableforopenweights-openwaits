@@ -6,9 +6,11 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { MlxComputeProvider } from "../lib/compute/mlx-provider.mjs";
-import { MODEL_CATALOG } from "../lib/model-catalog.mjs";
-
-const model = MODEL_CATALOG[0];
+const model = {
+  id: "mlx-community/Qwen3-0.6B-4bit",
+  name: "Qwen3 0.6B",
+  revision: "73e3e38d981303bc594367cd910ea6eb48349da8"
+};
 
 function fakeChild() {
   const child = new EventEmitter();

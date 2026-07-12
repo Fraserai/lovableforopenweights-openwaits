@@ -1,67 +1,60 @@
 # OpenWeight MVP
 
-A focused **Choose → Fork → Adapt → Run** vertical slice for open-weight AI.
+**Cursor / Replit for Open-Weight AI.**
 
-The supported development model is `mlx-community/Qwen3-0.6B-4bit`, pinned to revision `73e3e38d981303bc594367cd910ea6eb48349da8`. The same local snapshot is used for both LoRA training and inference.
+> **Choose → Fork → Fine-tune → Run**
 
-## Simulation
+OpenWeight lets a user choose one supported open-weight model, create an immutable lineage, fine-tune it from 5–20 example conversations, and chat with either the base or fine-tuned state. Together AI supplies the managed training and inference infrastructure; the browser never asks for provider credentials, hardware, model paths, Python, or local GPU setup.
 
-Requirements: Node.js 20+
+## Run the managed MVP
 
-```bash
-npm start
-```
-
-Open `http://localhost:3000`. The default `MockComputeProvider` labels every run and response as simulation.
-
-## Real MLX lifecycle
-
-Requirements: Apple Silicon, Node.js 20+, Python 3.10+, and MLX-LM 0.31.3.
-
-Create an isolated Python environment and download the exact model revision:
+Requirements: Node.js 20+ and a server-side Together API key.
 
 ```bash
-python3 -m venv .venv
-.venv/bin/pip install 'mlx-lm[train]==0.31.3'
-.venv/bin/python -c 'from huggingface_hub import snapshot_download; snapshot_download(repo_id="mlx-community/Qwen3-0.6B-4bit", revision="73e3e38d981303bc594367cd910ea6eb48349da8", local_dir="data/models/qwen3-0.6b-4bit-73e3e38")'
+npm install
+TOGETHER_API_KEY=... npm start
 ```
 
-Start the app with the one real adaptation provider:
+Open `http://localhost:3000`.
 
-```bash
-COMPUTE_PROVIDER=mlx \
-MLX_MODEL_PATH="$PWD/data/models/qwen3-0.6b-4bit-73e3e38" \
-MLX_SERVER_COMMAND="$PWD/.venv/bin/mlx_lm.server" \
-MLX_LORA_COMMAND="$PWD/.venv/bin/mlx_lm.lora" \
-npm start
-```
+The application first preflights `Qwen/Qwen3-0.6B` for both Together fine-tuning eligibility and dedicated-endpoint hardware before presenting it as supported. If it cannot deploy, the server tries `Qwen/Qwen3-1.7B` and then `Qwen/Qwen3-4B`, returning only the smallest candidate that passes both checks. Together does not expose an immutable model revision through this lifecycle, so the persisted revision is explicitly `null` with `revisionStatus: "unavailable-from-provider"`.
 
-Required environment variables:
+## Managed lifecycle
 
-- `COMPUTE_PROVIDER=mlx`
-- `MLX_MODEL_PATH`: local snapshot of the pinned revision
-- `MLX_SERVER_COMMAND`: MLX-LM server executable
-- `MLX_LORA_COMMAND`: MLX-LM LoRA executable
+- Fine-tuning examples are validated on the server and written as conversation-format JSONL.
+- The file is uploaded and validated through Together before a LoRA job is created.
+- Together file and fine-tune job IDs are persisted, so page or Node-server reloads resume provider polling.
+- Completed jobs must include a real output model identity before the fine-tuned state becomes runnable.
+- Base inference uses Together serverless when the model is supported there; otherwise it uses the smallest available compatible dedicated hardware.
+- Fine-tuned inference uses a dedicated endpoint and its exact endpoint model name.
+- Stop deletes the dedicated endpoint so it no longer incurs idle endpoint charges.
+- The app never silently falls back from the fine-tuned model to base.
 
-Optional MLX variables:
+Optional server settings:
 
-- `MLX_ARTIFACTS_PATH` defaults to `data/artifacts`.
-- `MLX_TRAIN_ITERS` defaults to `20`.
-- `MLX_TRAIN_LAYERS` defaults to `4`.
-- `MLX_TRAIN_LEARNING_RATE` defaults to `0.0001`.
-- `MLX_START_TIMEOUT_MS` defaults to `120000`.
-- `MLX_POLL_INTERVAL_MS` defaults to `250`.
-
-The real flow accepts 5–20 structured examples, writes MLX chat-format training data, creates a LoRA adapter, verifies `adapters.safetensors`, and only then enables adapted inference. Adapted startup passes the adapter path directly to `mlx_lm.server`; missing or invalid weights fail without falling back to base.
-
-## Other providers
-
-`MockComputeProvider` and `OllamaComputeProvider` remain available. Ollama's `qwen3:0.6b` artifact is explicitly treated as a different artifact from the pinned Hugging Face/MLX revision and cannot run this adapter. Providers are selected only through `COMPUTE_PROVIDER`; there is no automatic fallback.
+- `TOGETHER_ARTIFACTS_PATH` defaults to `data/artifacts`.
+- `TOGETHER_POLL_INTERVAL_MS` defaults to `2000`.
+- `TOGETHER_FILE_TIMEOUT_MS` defaults to `120000`.
+- `TOGETHER_ENDPOINT_TIMEOUT_MS` defaults to `900000`.
 
 ## Tests
+
+Tests use mocked Together clients and never consume provider credits:
 
 ```bash
 npm test
 ```
 
-Workspace, adaptation, artifact, and runtime metadata persist in the configured data file so browser reloads recover honest state.
+Explicit simulation is available only for tests or internal development:
+
+```bash
+APP_MODE=test npm start
+# or
+COMPUTE_PROVIDER=mock npm start
+```
+
+## Internal local proof
+
+The earlier `MlxComputeProvider`, `MlxAdaptationTrainer`, and `OllamaComputeProvider` remain in the repository as internal development proofs. They are not the customer default and are not exposed as browser choices. Engineers can select them explicitly with `COMPUTE_PROVIDER=mlx` or `COMPUTE_PROVIDER=ollama` and the provider-specific environment variables documented in those modules and their tests.
+
+There is no automatic provider fallback. The customer application fails startup clearly when `TOGETHER_API_KEY` is missing.

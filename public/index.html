@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Choose, fork, adapt, and run a pinned open-weight development model.">
-  <title>OpenWeight | Choose, Fork, Adapt, Run</title>
+  <meta name="description" content="Choose, fork, fine-tune, and run an open-weight model with managed cloud compute.">
+  <title>OpenWeight | Choose, Fork, Fine-tune, Run</title>
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
@@ -22,7 +22,7 @@
     <aside class="workspace-rail">
       <div class="rail-heading">
         <p>Open-weight workspace</p>
-        <h1>Choose. Fork.<br>Adapt. Run.</h1>
+        <h1>Choose. Fork.<br>Fine-tune. Run.</h1>
       </div>
 
       <nav class="steps" aria-label="Product loop">
@@ -36,7 +36,7 @@
         </button>
         <button class="step" data-stage="adapt" disabled>
           <span class="step-number">03</span>
-          <span><strong>Adapt</strong><small id="adapt-step-status">Not requested</small></span>
+          <span><strong>Fine-tune</strong><small id="adapt-step-status">Not started</small></span>
         </button>
         <button class="step" data-stage="run" disabled>
           <span class="step-number">04</span>
@@ -49,7 +49,7 @@
         <dl>
           <div><dt>Chosen model</dt><dd id="chosen-model-state">None</dd></div>
           <div><dt>Fork</dt><dd id="fork-state">Not created</dd></div>
-          <div><dt>Adaptation</dt><dd id="adaptation-state">Not requested</dd></div>
+          <div><dt>Fine-tune</dt><dd id="adaptation-state">Not started</dd></div>
           <div><dt>Active state</dt><dd id="active-state">Not started</dd></div>
           <div><dt>Execution</dt><dd id="execution-state">Not started</dd></div>
         </dl>
@@ -63,7 +63,7 @@
         <header class="stage-heading">
           <p>01 / Choose</p>
           <h2 id="choose-title">Choose your starting model</h2>
-          <span>One supported model, pinned to an exact source revision.</span>
+          <span>One supported model, verified against the managed provider before use.</span>
         </header>
         <div id="model-list" class="model-list" aria-live="polite"></div>
       </section>
@@ -84,7 +84,7 @@
 
       <section id="adapt" class="stage" aria-labelledby="adapt-title">
         <header class="stage-heading">
-          <p>03 / Adapt</p>
+          <p>03 / Fine-tune</p>
           <h2 id="adapt-title">Describe the version you need</h2>
           <span>Show your version how ideal conversations should work.</span>
         </header>
@@ -99,22 +99,22 @@
             <div id="examples-list"></div>
           </section>
           <div id="adaptation-progress" class="adaptation-progress hidden" role="status">
-            <strong id="adaptation-status">Adaptation specification</strong>
+            <strong id="adaptation-status">Preparing</strong>
             <span id="adaptation-status-note"></span>
           </div>
           <details class="technical-details form-details">
-            <summary>Adaptation details</summary>
-            <label for="adapt-name">Adaptation label</label>
+            <summary>Fine-tuning details</summary>
+            <label for="adapt-name">Version label</label>
             <input id="adapt-name" name="name" value="Focused specialist" maxlength="80" required>
             <dl>
               <div><dt>Training backend</dt><dd id="adaptation-backend">Not started</dd></div>
               <div><dt>Base revision</dt><dd><code id="adaptation-revision">-</code></dd></div>
-              <div><dt>Adapter</dt><dd><code id="adaptation-path">Not created</code></dd></div>
+              <div><dt>Output model</dt><dd><code id="adaptation-path">Not published</code></dd></div>
               <div><dt>Configuration</dt><dd id="adaptation-config">Available after start</dd></div>
-              <div><dt>Logs</dt><dd><pre id="adaptation-logs">No training logs</pre></dd></div>
+              <div><dt>Status details</dt><dd><pre id="adaptation-logs">Not started</pre></dd></div>
             </dl>
           </details>
-          <button id="adapt-button" class="primary" type="submit">Start adaptation</button>
+          <button id="adapt-button" class="primary" type="submit">Fine-tune</button>
         </form>
       </section>
 
@@ -123,7 +123,7 @@
           <div>
             <p>04 / Run</p>
             <h2 id="run-title">Run a model state</h2>
-            <span>Choose the immutable base or your completed adaptation.</span>
+            <span>Choose the immutable base or your completed fine-tuned version.</span>
           </div>
           <strong id="execution-flag" class="execution-flag simulation">Simulated output</strong>
         </header>
@@ -142,13 +142,13 @@
                 <span><strong>Base</strong><small id="base-state-label">Immutable base revision</small></span>
               </label>
               <label id="adapted-state-option">
-                <input type="radio" name="model-state" value="adapted" disabled>
-                <span><strong>Adapted</strong><small id="adapted-state-label">Create an adaptation first</small></span>
+                <input type="radio" name="model-state" value="fine-tuned" disabled>
+                <span><strong>Fine-tuned</strong><small id="adapted-state-label">Fine-tune your fork first</small></span>
               </label>
             </fieldset>
             <div class="adaptation-callout">
-              <small>Adaptation request</small>
-              <p id="adaptation-objective-summary">No adaptation requested. The base state is available.</p>
+              <small>Fine-tuning goal</small>
+              <p id="adaptation-objective-summary">No fine-tune started. The base state is available.</p>
             </div>
 
             <div class="run-status-row">

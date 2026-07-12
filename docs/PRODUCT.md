@@ -2,31 +2,30 @@
 
 ## One-line explainer
 
-**Replit for open-weight AI.**
+**Cursor / Replit for Open-Weight AI.**
 
 ## Core promise
 
-Choose an existing open-weight model, fork your own lineage, adapt it, and run your version inside one live environment.
+Choose an open-weight model, fork an owned lineage, fine-tune it from examples, and run the exact state inside one managed workspace.
 
 ## Product loop
 
 ### Choose
 
-Pick an exact model release and revision.
+Choose the single model that has passed provider training and deployment preflight.
 
 ### Fork
 
-Create an owned model lineage derived from the immutable base. Forking may use copy-on-write storage; it does not need to duplicate the full base weights.
+Create an owned lineage referencing the provider's source and model identities. Record an exact revision only when the provider exposes one; otherwise record that it is unavailable.
 
-### Adapt
+### Fine-tune
 
-Change the fork for a domain, task, behaviour, architecture, or deployment target. `Adapt` is the umbrella term. Version one only exposes LoRA fine-tuning.
+Provide 5–20 user/assistant examples. The server validates and securely uploads them, starts one real Together LoRA job, and follows the provider through preparing, uploading, queued, training, publishing, complete, failed, or cancelled.
 
 ### Run
 
-Load a chosen model state onto compute and make inference usable through a playground and API.
-When development hardware runs a substitute, the workspace must show both the chosen lineage model and the actual executing model.
+Run either Base or Fine-tuned with managed cloud inference. Chat becomes available only after real compute is ready. Stopping a dedicated endpoint releases it so idle billing ends.
 
-## Non-goals
+## Product boundaries
 
-The application is not currently a model hub, GPU marketplace, evaluation platform, enterprise control plane, or no-code application builder.
+Users never configure providers, API keys, GPU types, local weights, Python, MLX, Ollama, or terminals. The MVP does not include accounts, teams, billing, evaluations, RAG, governance, deployment choices, multiple models, or multiple cloud providers.

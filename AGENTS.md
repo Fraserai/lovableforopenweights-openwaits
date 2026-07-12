@@ -2,33 +2,32 @@
 
 ## Product
 
-This repository is the first vertical slice of **Replit for open-weight AI**.
+This repository is the first vertical slice of **Cursor / Replit for Open-Weight AI**.
 
-The product loop is fixed:
+The customer-facing product loop is fixed:
 
-> **Choose → Fork → Adapt → Run**
-
-Do not introduce marketplaces, teams, enterprise governance, evaluation dashboards, RAG, generic workflows, or support for arbitrary models.
+> **Choose → Fork → Fine-tune → Run**
 
 ## Current scope
 
-- One supported model: GLM-5.2
-- One adaptation concept: LoRA
-- One compute provider at a time
+- One supported cloud-served model
+- One fine-tuning method: LoRA supervised fine-tuning
+- One managed provider: Together AI
 - One persistent workspace lineage
 - One browser experience
 
 ## Engineering rules
 
-- Preserve the domain terms `Choose`, `Fork`, `Adapt`, and `Run` in code and UI.
-- `Fork` must retain an immutable reference to the base model and create a new owned lineage.
-- `Adapt` is the umbrella domain term; LoRA fine-tuning is the first implementation.
-- `Run` means allocate compute, load a model state, health-check it, and make inference available.
-- Keep provider-specific logic behind an adapter.
-- Never claim real training or inference occurred when mock compute is active.
-- Prefer the smallest end-to-end implementation over abstractions for imagined features.
-- Add tests for every state transition.
-
-## Immediate task
-
-Make the first real-compute path work for GLM-5.2 without expanding product scope. Read `docs/CODEX_BUILD_PROMPT.md` before changing code.
+- Use `Choose`, `Fork`, `Fine-tune`, and `Run` in customer-facing language. Never use `Adapt` in the interface.
+- `Fork` retains an immutable provider/source model reference and creates an owned lineage.
+- The browser never requests API keys, providers, GPU types, model paths, or local infrastructure setup.
+- `TOGETHER_API_KEY` is server-only and must never be returned or persisted in workspace data.
+- Together file, fine-tuning job, output model, and endpoint IDs are persisted for truthful recovery.
+- A fine-tune is complete only after Together reports completion and an output model identity.
+- Fine-tuned inference never silently falls back to base.
+- Stop must release or delete dedicated compute.
+- Keep provider-specific logic behind the existing adapter boundary.
+- Preserve MLX and Ollama as internal development proofs; do not expose or expand them by default.
+- Mock compute is allowed only through explicit test/development configuration and is always labelled simulation.
+- Do not add models, cloud providers, accounts, billing, teams, evaluations, RAG, governance, or enterprise features.
+- Add focused tests for every state transition without using live provider billing.

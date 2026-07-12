@@ -62,15 +62,15 @@ function wait(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
-test("Choose -> Fork -> Adapt -> Run completes an honest simulated playground request", async () => {
+test("Choose -> Fork -> Fine-tune -> Run completes an honest simulated playground request", async () => {
   const app = await startTestServer();
 
   try {
     const modelsResult = await request(app.baseUrl, "/api/models");
     assert.equal(modelsResult.response.status, 200);
     const chosenModel = modelsResult.payload.models.at(0);
-    assert.equal(chosenModel.id, "mlx-community/Qwen3-0.6B-4bit");
-    assert.match(chosenModel.revision, /^[a-f0-9]{40}$/);
+    assert.equal(chosenModel.id, "Qwen/Qwen3-0.6B");
+    assert.equal(chosenModel.revision, null);
 
     const forkResult = await request(app.baseUrl, "/api/workspaces", {
       method: "POST",
@@ -85,34 +85,34 @@ test("Choose -> Fork -> Adapt -> Run completes an honest simulated playground re
 
     const prematureRun = await request(app.baseUrl, `/api/workspaces/${fork.id}/run`, {
       method: "POST",
-      body: JSON.stringify({ modelState: "adapted" })
+      body: JSON.stringify({ modelState: "fine-tuned" })
     });
     assert.equal(prematureRun.response.status, 409);
 
     const objective = "Explain open-weight model architecture and turn ideas into practical experiments.";
-    const adaptResult = await request(app.baseUrl, `/api/workspaces/${fork.id}/adapt`, {
+    const adaptResult = await request(app.baseUrl, `/api/workspaces/${fork.id}/fine-tune`, {
       method: "POST",
       body: JSON.stringify({ name: "Research specialist", objective })
     });
     assert.equal(adaptResult.response.status, 200);
     const adapted = adaptResult.payload.workspace;
-    assert.equal(adapted.phase, "adapted");
-    assert.equal(adapted.adaptation.method, "lora");
-    assert.equal(adapted.adaptation.objective, objective);
-    assert.equal(adapted.adaptation.status, "specification-created");
+    assert.equal(adapted.phase, "fine-tuned");
+    assert.equal(adapted.fineTune.method, "lora");
+    assert.equal(adapted.fineTune.objective, objective);
+    assert.equal(adapted.fineTune.status, "simulated");
 
     const runResult = await request(app.baseUrl, `/api/workspaces/${fork.id}/run`, {
       method: "POST",
-      body: JSON.stringify({ modelState: "adapted" })
+      body: JSON.stringify({ modelState: "fine-tuned" })
     });
     assert.equal(runResult.response.status, 200);
     const running = runResult.payload.workspace;
     assert.equal(running.phase, "running");
     assert.equal(running.run.status, "running");
     assert.equal(running.run.executionMode, "simulation");
-    assert.equal(running.run.modelState.kind, "adapted");
-    assert.equal(running.run.modelState.adaptationId, adapted.adaptation.id);
-    assert.match(running.run.note, /no model weights.*training.*GPU inference/i);
+    assert.equal(running.run.modelState.kind, "fine-tuned");
+    assert.equal(running.run.modelState.fineTuneId, adapted.fineTune.id);
+    assert.match(running.run.note, /no cloud fine-tuning.*inference/i);
 
     const chatResult = await request(app.baseUrl, `/api/workspaces/${fork.id}/chat`, {
       method: "POST",
@@ -120,7 +120,7 @@ test("Choose -> Fork -> Adapt -> Run completes an honest simulated playground re
     });
     assert.equal(chatResult.response.status, 200);
     assert.equal(chatResult.payload.message.executionMode, "simulation");
-    assert.equal(chatResult.payload.message.modelState.kind, "adapted");
+    assert.equal(chatResult.payload.message.modelState.kind, "fine-tuned");
     assert.match(chatResult.payload.message.content, /^Simulated response/);
     assert.match(chatResult.payload.message.content, /No model inference was performed/);
 
@@ -188,7 +188,7 @@ test("API preserves real Ollama model identity through start, chat, status, and 
     assert.equal(run.provider, "ollama");
     assert.equal(run.realExecution, true);
     assert.equal(run.actualModelId, "qwen3:0.6b");
-    assert.equal(run.requestedModelId, "mlx-community/Qwen3-0.6B-4bit");
+    assert.equal(run.requestedModelId, "Qwen/Qwen3-0.6B");
     assert.equal(run.developmentModel, true);
 
     const statusResult = await request(app.baseUrl, `/api/workspaces/${fork.id}/run/status`);
