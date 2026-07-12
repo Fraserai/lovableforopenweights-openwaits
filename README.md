@@ -6,7 +6,7 @@ The product loop is:
 
 > **Choose → Fork → Adapt → Run**
 
-Version `0.1.0` intentionally supports one model (`GLM-5.2`) and one adaptation method (`LoRA` specification). It uses a mock compute adapter so the complete application flow runs without GPU credentials or downloading model weights.
+Version `0.1.0` intentionally supports one model (`GLM-5.2`) and one adaptation method (`LoRA` specification). It uses a mock compute adapter so the complete application flow runs without GPU credentials or downloading model weights. The interface and API label every mock run and playground response as simulation.
 
 ## Run locally
 
@@ -37,6 +37,8 @@ npm test
 3. **Adapt** the fork by creating a LoRA adaptation specification.
 4. **Run** that state through a compute provider and chat through its endpoint.
 
+The latest workspace is restored after a browser reload. Run can target either the immutable base state or an existing adaptation specification.
+
 ## What is real today
 
 - Model catalogue
@@ -49,7 +51,7 @@ npm test
 
 ## What is deliberately mocked
 
-`MockComputeProvider` does not download GLM-5.2, allocate GPUs, train adapters, or execute inference. Its purpose is to make the product state machine and interface testable before choosing infrastructure.
+`MockComputeProvider` does not download GLM-5.2, allocate GPUs, train adapters, or execute inference. Its output is simulated and must not be interpreted as model output. Its purpose is to make the product state machine and interface testable before choosing infrastructure.
 
 ## Next engineering milestone
 

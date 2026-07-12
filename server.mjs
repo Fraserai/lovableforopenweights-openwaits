@@ -105,15 +105,39 @@ async function handleApi(request, response, url) {
 
   params = routeMatch(url.pathname, /^\/api\/workspaces\/(?<id>[^/]+)\/run$/);
   if (request.method === "POST" && params) {
+    const body = await readJson(request);
     const current = await getWorkspace(params.id);
     if (!current) return sendJson(response, 404, { error: "Workspace not found" });
-    const run = await compute.start({ workspace: current });
-    const workspace = await updateWorkspace(params.id, (workspace) => ({
-      ...workspace,
-      phase: "running",
-      run
-    }));
-    return sendJson(response, 200, { workspace });
+    const modelState = body.modelState || "base";
+    if (!["base", "adapted"].includes(modelState)) {
+      return sendJson(response, 400, { error: "Model state must be base or adapted" });
+    }
+    if (modelState === "adapted" && !current.adaptation) {
+      return sendJson(response, 409, { error: "Create an adaptation before running the adapted state" });
+    }
+
+    try {
+      const run = await compute.start({ workspace: current, modelState });
+      const workspace = await updateWorkspace(params.id, (workspace) => ({
+        ...workspace,
+        phase: "running",
+        run
+      }));
+      return sendJson(response, 200, { workspace });
+    } catch (error) {
+      await updateWorkspace(params.id, (workspace) => ({
+        ...workspace,
+        phase: workspace.adaptation ? "adapted" : "forked",
+        run: {
+          provider: compute.name,
+          executionMode: compute.executionMode || "unknown",
+          status: "failed",
+          error: error.message || "Compute failed to start",
+          failedAt: new Date().toISOString()
+        }
+      }));
+      return sendJson(response, 503, { error: error.message || "Compute failed to start" });
+    }
   }
 
   params = routeMatch(url.pathname, /^\/api\/workspaces\/(?<id>[^/]+)\/chat$/);
@@ -179,5 +203,6 @@ const server = http.createServer(async (request, response) => {
 });
 
 server.listen(port, () => {
-  console.log(`OpenWeight MVP running at http://localhost:${port}`);
+  const address = server.address();
+  console.log(`OpenWeight MVP running at http://localhost:${address.port}`);
 });
