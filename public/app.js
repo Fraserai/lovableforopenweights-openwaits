@@ -479,8 +479,19 @@ function addExample(example = {}) {
     [...list.children].forEach((item, itemIndex) => {
       item.querySelector(".example-head strong").textContent = `Example ${itemIndex + 1}`;
     });
+    renderExampleCount();
   });
   list.appendChild(row);
+  renderExampleCount();
+}
+
+function renderExampleCount() {
+  const count = byId("examples-list").children.length;
+  setText("examples-count", `${count} of 20`);
+  byId("add-example").disabled = count >= 20;
+  document.querySelectorAll(".remove-example").forEach((button) => {
+    button.disabled = count <= 5;
+  });
 }
 
 function collectExamples() {

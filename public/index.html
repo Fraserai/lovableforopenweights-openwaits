@@ -90,10 +90,14 @@
         </header>
         <form id="adapt-form" class="action-form">
           <label class="intent-label" for="adapt-objective">What should your version become better at?</label>
-          <textarea id="adapt-objective" name="objective" rows="7" placeholder="For example: Explain open-weight model architecture clearly and turn research ideas into practical experiments." required></textarea>
+          <textarea id="adapt-objective" name="objective" rows="4" placeholder="For example: Explain open-weight model architecture clearly and turn research ideas into practical experiments." required></textarea>
           <section class="examples-section" aria-labelledby="examples-title">
             <div class="examples-heading">
-              <div><strong id="examples-title">Examples</strong><small>Provide 5–20 user messages with ideal responses.</small></div>
+              <div>
+                <span id="examples-count" class="examples-count">5 of 20</span>
+                <strong id="examples-title">Training examples</strong>
+                <small>Pair a user message with the response your model should learn.</small>
+              </div>
               <button id="add-example" class="secondary compact" type="button" aria-label="Add example">+ Add</button>
             </div>
             <div id="examples-list"></div>
@@ -114,7 +118,10 @@
               <div><dt>Status details</dt><dd><pre id="adaptation-logs">Not started</pre></dd></div>
             </dl>
           </details>
-          <button id="adapt-button" class="primary" type="submit">Fine-tune</button>
+          <div class="form-action-bar">
+            <span>Examples stay private to your managed fine-tuning job.</span>
+            <button id="adapt-button" class="primary" type="submit">Fine-tune</button>
+          </div>
         </form>
       </section>
 
