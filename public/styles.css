@@ -41,12 +41,7 @@ body {
   min-height: 100vh;
   color: var(--text);
   background-color: var(--canvas);
-  background-image:
-    linear-gradient(rgba(255, 64, 0, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 64, 0, 0.04) 1px, transparent 1px),
-    linear-gradient(135deg, rgba(255, 64, 0, 0.035), transparent 38%),
-    linear-gradient(315deg, rgba(8, 127, 140, 0.025), transparent 42%);
-  background-size: 32px 32px;
+  background-image: linear-gradient(120deg, #f7fff7, #fffaf7 48%, #f7fff7);
 }
 
 body::before {
@@ -84,14 +79,14 @@ summary:focus-visible {
   position: sticky;
   top: 0;
   z-index: 20;
-  height: 58px;
-  padding: 0 22px;
+  height: 76px;
+  padding: 0 max(28px, calc((100vw - 1280px) / 2));
   display: flex;
   align-items: center;
   justify-content: space-between;
   border-bottom: 1px solid var(--line);
-  background: rgba(247, 255, 247, 0.88);
-  box-shadow: 0 10px 32px rgba(23, 32, 43, 0.055);
+  background: rgba(247, 255, 247, 0.92);
+  box-shadow: 0 8px 26px rgba(23, 32, 43, 0.045);
   backdrop-filter: saturate(135%) blur(14px);
   -webkit-backdrop-filter: saturate(135%) blur(14px);
 }
@@ -102,13 +97,13 @@ summary:focus-visible {
   gap: 10px;
   color: var(--text);
   text-decoration: none;
-  font-size: 0.94rem;
+  font-size: 1.08rem;
   font-weight: 720;
 }
 
 .brand-mark {
-  width: 30px;
-  height: 30px;
+  width: 38px;
+  height: 38px;
   display: grid;
   place-items: center;
   position: relative;
@@ -117,7 +112,7 @@ summary:focus-visible {
   color: #ffffff;
   background: #17202b;
   box-shadow: 4px 4px 0 #ff4000;
-  font-size: 0.66rem;
+  font-size: 0.76rem;
   font-weight: 800;
 }
 
@@ -168,6 +163,16 @@ summary:focus-visible {
   font-weight: 700;
 }
 
+.environment-badge {
+  min-height: 42px;
+  padding: 0 15px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: #435064;
+  background: rgba(255, 255, 255, 0.58);
+  box-shadow: var(--shadow-sm);
+}
+
 .environment-badge > span:first-child {
   width: 7px;
   height: 7px;
@@ -188,25 +193,25 @@ summary:focus-visible {
 }
 
 .workspace-shell {
-  width: min(1440px, 100%);
-  min-height: calc(100vh - 58px);
-  margin: 0 auto;
-  display: grid;
-  grid-template-columns: 260px minmax(0, 1fr);
+  width: 100%;
+  min-height: calc(100vh - 76px);
+  display: block;
 }
 
 .workspace-rail {
   position: sticky;
-  top: 58px;
-  height: calc(100vh - 58px);
-  padding: 28px 18px;
-  overflow-y: auto;
-  border-right: 1px solid var(--line);
-  background:
-    linear-gradient(180deg, rgba(247, 255, 247, 0.93), rgba(239, 248, 241, 0.78));
-  box-shadow: inset -8px 0 24px rgba(23, 32, 43, 0.025);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  top: 76px;
+  z-index: 10;
+  width: min(1210px, calc(100% - 48px));
+  height: auto;
+  margin: 30px auto 0;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .rail-heading p,
@@ -224,34 +229,50 @@ summary:focus-visible {
   line-height: 1.12;
 }
 
+.rail-heading,
+.state-summary {
+  display: none;
+}
+
 .steps {
+  padding: 10px;
   display: grid;
-  gap: 4px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
   position: relative;
+  border: 1px solid rgba(31, 41, 55, 0.09);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 .steps::before {
   content: "";
   position: absolute;
-  top: 28px;
-  bottom: 28px;
-  left: 22px;
-  width: 2px;
-  background: repeating-linear-gradient(to bottom, rgba(104, 115, 134, 0.22) 0 5px, transparent 5px 10px);
+  top: 50%;
+  right: 9%;
+  bottom: auto;
+  left: 9%;
+  width: auto;
+  height: 1px;
+  z-index: 0;
+  background: repeating-linear-gradient(90deg, rgba(104, 115, 134, 0.26) 0 4px, transparent 4px 9px);
 }
 
 .step {
   width: 100%;
-  min-height: 56px;
-  padding: 9px 10px;
+  min-height: 72px;
+  padding: 10px 12px;
   display: grid;
-  grid-template-columns: 32px minmax(0, 1fr);
+  grid-template-columns: 38px minmax(0, 1fr);
   align-items: center;
   gap: 8px;
-  border: 1px solid transparent;
+  border: 1px solid rgba(31, 41, 55, 0.08);
   border-radius: 8px;
   color: #7b8696;
-  background: transparent;
+  background: rgba(247, 255, 247, 0.94);
   text-align: left;
   position: relative;
   z-index: 1;
@@ -261,31 +282,33 @@ summary:focus-visible {
 .step:hover:not(:disabled) {
   color: var(--text);
   background: rgba(247, 255, 247, 0.8);
-  transform: translateX(2px);
+  border-color: rgba(255, 64, 0, 0.22);
+  transform: translateY(-1px);
 }
 
 .step.active {
   border-color: rgba(255, 64, 0, 0.2);
   color: var(--text);
   background: rgba(247, 255, 247, 0.94);
-  box-shadow: inset 3px 0 0 var(--blue), var(--shadow-float);
+  box-shadow: 0 12px 26px rgba(23, 32, 43, 0.085), 0 0 0 1px rgba(255, 64, 0, 0.08);
+}
+
+.step.complete {
+  border-color: rgba(22, 134, 92, 0.16);
+  background: rgba(247, 255, 247, 0.96);
+}
+
+.step:not(.complete):not(.active) {
+  background: rgba(255, 255, 255, 0.88);
 }
 
 .step.complete:not(:last-child)::after {
-  content: "";
-  position: absolute;
-  top: 40px;
-  bottom: -17px;
-  left: 20px;
-  width: 2px;
-  z-index: -1;
-  background: linear-gradient(var(--green), rgba(22, 134, 92, 0.2));
-  box-shadow: 0 0 8px rgba(22, 134, 92, 0.22);
+  display: none;
 }
 
 .step-number {
-  width: 28px;
-  height: 28px;
+  width: 34px;
+  height: 34px;
   display: grid;
   place-items: center;
   position: relative;
@@ -298,8 +321,8 @@ summary:focus-visible {
 
 .step-number b {
   position: absolute;
-  right: -4px;
-  bottom: -5px;
+  right: -5px;
+  bottom: -6px;
   min-width: 14px;
   padding: 1px 2px;
   border-radius: 4px;
@@ -391,7 +414,7 @@ summary:focus-visible {
 }
 
 .step strong {
-  font-size: 0.84rem;
+  font-size: 0.9rem;
 }
 
 .step small {
@@ -454,16 +477,18 @@ dd {
 }
 
 .workbench {
+  width: min(1210px, calc(100% - 48px));
   min-width: 0;
-  padding: 42px clamp(28px, 5vw, 74px) 100px;
+  margin: 0 auto;
+  padding: 64px 0 100px;
   position: relative;
   overflow: hidden;
 }
 
 .ambient-lineage {
   position: absolute;
-  top: 32px;
-  right: 38px;
+  top: 52px;
+  right: 8px;
   width: 190px;
   height: 92px;
   z-index: -1;
@@ -506,20 +531,23 @@ dd {
 }
 
 .stage-heading {
-  max-width: 820px;
-  margin-bottom: 28px;
-  padding-left: 20px;
+  max-width: 780px;
+  margin-bottom: 40px;
+  padding-left: 0;
   position: relative;
 }
 
 .stage-heading::before {
   content: "";
   position: absolute;
-  inset: 2px auto 2px 0;
-  width: 5px;
-  border-radius: 4px;
+  top: 2px;
+  left: 2px;
+  width: 9px;
+  height: 9px;
+  border-radius: 1px;
   background: var(--blue);
-  box-shadow: 0 0 0 4px rgba(255, 64, 0, 0.1);
+  box-shadow: 0 0 0 4px rgba(255, 64, 0, 0.08);
+  transform: rotate(45deg);
 }
 
 #fork .stage-heading::before {
@@ -540,19 +568,23 @@ dd {
 #fork .stage-heading p { color: var(--cyan); }
 #adapt .stage-heading p { color: var(--green); }
 #run .stage-heading p { color: var(--violet); }
+
+.stage-heading p {
+  padding-left: 22px;
 }
 
 .stage-heading h2 {
-  margin: 0 0 8px;
-  font-size: 2.08rem;
+  margin: 0 0 12px;
+  font-size: 3.15rem;
   font-weight: 780;
-  line-height: 1.12;
+  line-height: 1.04;
 }
 
 .stage-heading > span,
 .stage-heading > div > span {
   color: var(--muted);
-  font-size: 0.94rem;
+  font-size: 1.02rem;
+  line-height: 1.55;
 }
 
 .run-heading {
@@ -578,7 +610,7 @@ dd {
 }
 
 .model-list {
-  max-width: 820px;
+  max-width: none;
 }
 
 .model-card {
@@ -727,7 +759,11 @@ dd {
 }
 
 .action-form {
-  max-width: 860px;
+  max-width: none;
+}
+
+#adapt .action-form {
+  max-width: none;
 }
 
 .action-form > label,
@@ -744,7 +780,7 @@ dd {
 }
 
 .fork-lineage {
-  max-width: 860px;
+  max-width: none;
   min-height: 138px;
   padding: 20px 24px;
   display: grid;
@@ -1874,15 +1910,16 @@ code {
 
 @media (max-width: 920px) {
   .workspace-shell {
-    grid-template-columns: 1fr;
+    display: block;
   }
 
   .workspace-rail {
     position: static;
+    width: calc(100% - 30px);
     height: auto;
-    padding: 20px 22px;
-    border-right: 0;
-    border-bottom: 1px solid var(--line);
+    margin: 18px auto 0;
+    padding: 0;
+    border: 0;
   }
 
   .rail-heading h1 {
@@ -1912,7 +1949,8 @@ code {
   }
 
   .workbench {
-    padding-top: 32px;
+    width: calc(100% - 30px);
+    padding: 46px 0 80px;
   }
 
   .run-layout {
@@ -1988,7 +2026,8 @@ code {
   }
 
   .workspace-rail {
-    padding: 17px 15px;
+    width: calc(100% - 30px);
+    padding: 0;
   }
 
   .rail-heading h1 {
@@ -2004,11 +2043,12 @@ code {
   }
 
   .workbench {
-    padding: 26px 15px 70px;
+    width: calc(100% - 30px);
+    padding: 36px 0 70px;
   }
 
   .stage-heading h2 {
-    font-size: 1.65rem;
+    font-size: 2.2rem;
   }
 
   .run-heading,
