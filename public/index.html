@@ -19,7 +19,14 @@
     </div>
   </header>
 
-  <main class="workspace-shell">
+  <main class="workspace-shell home-mode">
+    <div id="notice" class="notice global-notice hidden" role="status"></div>
+    <section id="home-intro" class="home-intro" aria-labelledby="home-title">
+      <p>Open-weight model workspace</p>
+      <h1 id="home-title">Build an open-weight<br>model your way.</h1>
+      <span>Choose a foundation, create your fork, shape its behaviour and bring it online.</span>
+    </section>
+
     <aside class="workspace-rail">
       <div class="rail-heading">
         <p>Open-weight workspace</p>
@@ -57,8 +64,66 @@
       </section>
     </aside>
 
+    <section id="home-dashboard" class="home-dashboard" aria-label="Model workspace overview">
+      <section class="home-panel foundation-panel" aria-labelledby="home-foundation-title">
+        <header class="home-panel-heading">
+          <div>
+            <h2 id="home-foundation-title">Choose your foundation</h2>
+            <p>Start with the supported open-weight model.</p>
+          </div>
+          <span class="status-badge supported"><i></i>Supported</span>
+        </header>
+        <div class="home-model">
+          <div class="home-model-visual" aria-hidden="true">
+            <strong>0.6B</strong>
+            <span><i></i><i></i><i></i><i></i><i></i></span>
+          </div>
+          <div class="home-model-copy">
+            <small id="home-model-publisher">Qwen</small>
+            <h3 id="home-model-name">Loading model...</h3>
+            <p>A compact foundation ready to fork, teach and run.</p>
+            <div id="home-model-tags" class="model-tags"></div>
+          </div>
+          <button id="home-model-action" class="secondary" type="button" disabled>Loading...</button>
+        </div>
+      </section>
+
+      <section class="home-panel model-workspace-panel" aria-labelledby="home-workspace-title">
+        <header class="home-panel-heading">
+          <div>
+            <h2 id="home-workspace-title">Your model workspace</h2>
+            <p>From foundation to running model.</p>
+          </div>
+          <button id="home-resume" class="text-action" type="button">Open workspace <span aria-hidden="true">&rarr;</span></button>
+        </header>
+
+        <div class="home-lineage" aria-label="Current model lineage">
+          <div><small>Foundation</small><strong id="home-lineage-base">Not chosen</strong></div>
+          <span aria-hidden="true"><i></i></span>
+          <div><small>Your fork</small><strong id="home-lineage-fork">Not created</strong></div>
+        </div>
+
+        <div class="home-state-grid">
+          <section class="home-state examples-state">
+            <span class="home-state-icon examples-icon" aria-hidden="true"></span>
+            <div><small>Examples</small><strong id="home-examples-state">Not started</strong></div>
+            <button class="home-state-action" data-home-stage="adapt" type="button">Add examples</button>
+          </section>
+          <section class="home-state tune-state">
+            <span class="home-state-icon tune-icon" aria-hidden="true"></span>
+            <div><small>Fine-tune</small><strong id="home-tune-state">Not started</strong></div>
+            <button class="home-state-action" data-home-stage="adapt" type="button">Configure</button>
+          </section>
+          <section class="home-state run-state">
+            <span class="home-state-icon run-icon" aria-hidden="true"></span>
+            <div><small>Run</small><strong id="home-run-state">Not started</strong></div>
+            <button class="home-state-action primary" data-home-stage="run" type="button">Run model <span aria-hidden="true">&rarr;</span></button>
+          </section>
+        </div>
+      </section>
+    </section>
+
     <section class="workbench">
-      <div id="notice" class="notice hidden" role="status"></div>
       <div class="ambient-lineage" aria-hidden="true"><span></span><i></i><i></i><i></i><i></i></div>
 
       <section id="choose" class="stage active-stage" aria-labelledby="choose-title">

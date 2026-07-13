@@ -3,6 +3,7 @@ const state = {
   model: null,
   workspace: null,
   runtime: null,
+  view: "home",
   currentStage: "choose",
   runSelection: "base",
   activeExampleIndex: 0,
@@ -29,6 +30,22 @@ function clearNotice() {
   notice.textContent = "";
 }
 
+function resumeStage() {
+  if (state.workspace?.run || fineTuneOf(state.workspace)) return "run";
+  if (state.workspace) return "adapt";
+  if (state.model) return "fork";
+  return "choose";
+}
+
+function openHome() {
+  state.view = "home";
+  state.currentStage = resumeStage();
+  document.querySelector(".workspace-shell").classList.add("home-mode");
+  renderSteps();
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  window.scrollTo({ top: 0, behavior: reducedMotion ? "auto" : "smooth" });
+}
+
 async function api(path, options = {}) {
   const response = await fetch(path, {
     headers: { "content-type": "application/json", ...(options.headers || {}) },
@@ -44,7 +61,9 @@ async function api(path, options = {}) {
 }
 
 function openStage(stage) {
+  state.view = "stage";
   state.currentStage = stage;
+  document.querySelector(".workspace-shell").classList.remove("home-mode");
   document.querySelectorAll(".stage").forEach((element) => {
     element.classList.toggle("active-stage", element.id === stage);
   });
@@ -89,9 +108,62 @@ function renderSteps() {
     button.disabled = !stageIsUnlocked(stage);
     button.classList.toggle("active", stage === state.currentStage);
     button.classList.toggle("complete", stageIsComplete(stage));
-    if (stage === state.currentStage) button.setAttribute("aria-current", "step");
+    if (stage === state.currentStage && state.view === "stage") button.setAttribute("aria-current", "step");
     else button.removeAttribute("aria-current");
     setText(`${stage}-step-status`, statuses[stage]);
+  });
+}
+
+function chooseModel(model) {
+  state.model = model;
+  byId("fork-name").value = `My ${model.name}`;
+  renderAll();
+  openStage("fork");
+}
+
+function renderHome() {
+  const model = state.model || state.models[0];
+  const fineTune = fineTuneOf(state.workspace);
+  const examples = fineTune?.examples || collectExamples();
+  const completeExamples = examples.filter((example) => example.user?.trim() && example.assistant?.trim()).length;
+
+  if (model) {
+    setText("home-model-publisher", model.publisher);
+    setText("home-model-name", model.name);
+    setText("home-lineage-base", state.model?.name || "Not chosen");
+    const tags = byId("home-model-tags");
+    tags.replaceChildren();
+    [model.license, model.modality, "Adaptable"].forEach((tag) => {
+      const element = document.createElement("span");
+      element.textContent = tag;
+      tags.appendChild(element);
+    });
+  }
+
+  const modelAction = byId("home-model-action");
+  modelAction.disabled = !model;
+  modelAction.textContent = state.model ? "Foundation chosen" : "Choose foundation";
+  modelAction.classList.toggle("selected", Boolean(state.model));
+  modelAction.onclick = () => {
+    if (!model) return;
+    if (state.model) openStage("fork");
+    else chooseModel(model);
+  };
+
+  setText("home-lineage-fork", state.workspace?.name || "Not created");
+  setText("home-examples-state", completeExamples ? `${completeExamples} examples` : "Not started");
+  setText("home-tune-state", fineTune ? fineTuneStatusLabel(fineTune.status) : "Not started");
+  setText("home-run-state", runStatusLabel(state.workspace?.run));
+
+  const nextStage = resumeStage();
+  const resume = byId("home-resume");
+  resume.innerHTML = `${state.workspace ? "Resume workspace" : "Start building"} <span aria-hidden="true">&rarr;</span>`;
+  resume.onclick = () => openStage(nextStage);
+
+  document.querySelectorAll("[data-home-stage]").forEach((button) => {
+    const stage = button.dataset.homeStage;
+    button.disabled = !stageIsUnlocked(stage);
+    button.onclick = () => openStage(stage);
   });
 }
 
@@ -192,12 +264,7 @@ function renderModelList() {
     button.className = "primary";
     button.type = "button";
     button.textContent = state.model?.id === model.id ? `${model.name} chosen` : `Choose ${model.name}`;
-    button.addEventListener("click", () => {
-      state.model = model;
-      byId("fork-name").value = `My ${model.name}`;
-      renderAll();
-      openStage("fork");
-    });
+    button.addEventListener("click", () => chooseModel(model));
 
     content.append(meta, title, summary, tags, button);
     card.append(visual, content);
@@ -476,6 +543,7 @@ function renderAll() {
   renderAdaptation();
   renderSteps();
   renderRun();
+  renderHome();
 }
 
 function addExample(example = {}, { select = false } = {}) {
@@ -595,6 +663,11 @@ document.querySelectorAll(".step").forEach((button) => {
   button.addEventListener("click", () => {
     if (!button.disabled) openStage(button.dataset.stage);
   });
+});
+
+document.querySelector(".brand").addEventListener("click", (event) => {
+  event.preventDefault();
+  openHome();
 });
 
 document.querySelectorAll('input[name="model-state"]').forEach((input) => {
@@ -795,9 +868,7 @@ async function loadApp() {
     }
 
     renderAll();
-    if (latest?.run || fineTuneOf(latest)) openStage("run");
-    else if (latest) openStage("adapt");
-    else openStage("choose");
+    openHome();
   } catch (error) {
     showNotice(error.message);
   }
