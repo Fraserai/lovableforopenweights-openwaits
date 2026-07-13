@@ -126,7 +126,7 @@ function renderRuntimeIdentity() {
   setText(
     "environment-label",
     managed
-      ? `Managed cloud compute · ${runtime.providerDisplayName}`
+      ? "Real hosted execution"
       : real ? `Internal runtime · ${runtime.providerDisplayName}` : "Explicit test simulation"
   );
 
@@ -139,7 +139,7 @@ function renderRuntimeIdentity() {
   setText(
     "runtime-identity-note",
     managed
-      ? `Managed by ${runtime.providerDisplayName}; no local setup required`
+      ? "Hosted execution; no local setup required"
       : real
         ? `Internal development provider · ${runtime.providerDisplayName}`
       : "No model inference; responses are simulated"
@@ -159,7 +159,10 @@ function renderModelList() {
 
     const visual = document.createElement("div");
     visual.className = "model-visual";
-    visual.textContent = "0.6B";
+    visual.innerHTML = `
+      <span class="weight-label">0.6B</span>
+      <span class="weight-layers" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+    `;
 
     const content = document.createElement("div");
     const meta = document.createElement("div");
@@ -173,11 +176,11 @@ function renderModelList() {
     const title = document.createElement("h3");
     title.textContent = model.name;
     const summary = document.createElement("p");
-    summary.textContent = model.summary;
+    summary.textContent = "A compact open-weight model ready to fork, teach, and run.";
 
     const tags = document.createElement("div");
     tags.className = "model-tags";
-    [model.license, model.modality, "LoRA"].forEach((tag) => {
+    [model.license, model.modality, "Adaptable"].forEach((tag) => {
       const element = document.createElement("span");
       element.textContent = tag;
       tags.appendChild(element);
@@ -205,12 +208,17 @@ function renderForkSource() {
   source.replaceChildren();
   if (!state.model) return;
 
+  if (state.workspace?.name) byId("fork-name").value = state.workspace.name;
+
+  setText("lineage-base-name", state.model.name);
+  setText("lineage-fork-name", byId("fork-name").value || "Untitled fork");
+
   const model = document.createElement("strong");
   model.textContent = state.model.name;
   const details = document.createElement("div");
   details.textContent = state.model.revision
     ? `Source ${state.model.id} at ${shortRevision(state.model.revision)}. The base reference remains immutable.`
-    : `Source ${state.model.id}. Together does not expose an exact revision; the provider identity remains immutable.`;
+    : `Source ${state.model.id}. The base identity remains fixed.`;
   source.append(model, details);
 }
 
@@ -267,9 +275,9 @@ function renderAdaptation() {
       : adaptation.status === "uploading"
         ? "Uploading securely…"
         : adaptation.status === "queued"
-          ? "Your fine-tune is queued with the managed provider."
+          ? "Your fine-tune is queued."
           : adaptation.status === "training"
-            ? "Fine-tuning your model in the cloud. You can safely reload this page."
+            ? "Fine-tuning your version. You can safely reload this page."
             : adaptation.status === "publishing"
               ? "Publishing your model…"
       : adaptation.status === "complete"
@@ -277,8 +285,8 @@ function renderAdaptation() {
         : adaptation.status === "failed"
           ? adaptation.error || "Fine-tuning failed. Update the examples and try again."
           : adaptation.status === "simulated"
-            ? "Simulation only: no cloud fine-tuning ran."
-            : "Waiting for the managed provider."
+            ? "Simulation only: no model weights were changed."
+            : "Waiting to start."
   );
   setText("adaptation-backend", adaptation.provider || adaptation.trainingBackend || "Simulation");
   setText("adaptation-revision", adaptation.baseRevision || "Unavailable from provider");
@@ -348,7 +356,7 @@ function renderRun() {
     "base-state-label",
     workspace.baseModel.revision
       ? `${workspace.baseModel.name} @ ${shortRevision(workspace.baseModel.revision)}`
-      : `${workspace.baseModel.name} · provider revision unavailable`
+      : `${workspace.baseModel.name} · fixed base identity`
   );
   const adaptedInput = document.querySelector('input[name="model-state"][value="fine-tuned"]');
   const adaptedRunnable = Boolean(fineTune) && runtime.supportsAdaptedState &&
@@ -556,6 +564,9 @@ function collectExamples() {
 byId("add-example").addEventListener("click", () => addExample({}, { select: true }));
 byId("previous-example").addEventListener("click", () => selectExample(state.activeExampleIndex - 1));
 byId("next-example").addEventListener("click", () => selectExample(state.activeExampleIndex + 1));
+byId("fork-name").addEventListener("input", () => {
+  setText("lineage-fork-name", byId("fork-name").value || "Untitled fork");
+});
 for (let index = 0; index < 5; index += 1) addExample();
 
 async function refreshWorkspace() {

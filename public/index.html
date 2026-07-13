@@ -28,19 +28,19 @@
 
       <nav class="steps" aria-label="Product loop">
         <button class="step active" data-stage="choose">
-          <span class="step-number">01</span>
+          <span class="step-number"><i aria-hidden="true"></i><b>01</b></span>
           <span><strong>Choose</strong><small id="choose-step-status">Not chosen</small></span>
         </button>
         <button class="step" data-stage="fork" disabled>
-          <span class="step-number">02</span>
+          <span class="step-number"><i aria-hidden="true"></i><b>02</b></span>
           <span><strong>Fork</strong><small id="fork-step-status">Not created</small></span>
         </button>
         <button class="step" data-stage="adapt" disabled>
-          <span class="step-number">03</span>
+          <span class="step-number"><i aria-hidden="true"></i><b>03</b></span>
           <span><strong>Fine-tune</strong><small id="adapt-step-status">Not started</small></span>
         </button>
         <button class="step" data-stage="run" disabled>
-          <span class="step-number">04</span>
+          <span class="step-number"><i aria-hidden="true"></i><b>04</b></span>
           <span><strong>Run</strong><small id="run-step-status">Not started</small></span>
         </button>
       </nav>
@@ -59,12 +59,13 @@
 
     <section class="workbench">
       <div id="notice" class="notice hidden" role="status"></div>
+      <div class="ambient-lineage" aria-hidden="true"><span></span><i></i><i></i><i></i><i></i></div>
 
       <section id="choose" class="stage active-stage" aria-labelledby="choose-title">
         <header class="stage-heading">
           <p>01 / Choose</p>
           <h2 id="choose-title">Choose your starting model</h2>
-          <span>One supported model, verified against the managed provider before use.</span>
+          <span>One focused starting point, ready to make your own.</span>
         </header>
         <div id="model-list" class="model-list" aria-live="polite"></div>
       </section>
@@ -75,6 +76,11 @@
           <h2 id="fork-title">Create your model lineage</h2>
           <span>Your fork owns its history while referencing the immutable base weights.</span>
         </header>
+        <div class="fork-lineage" role="img" aria-label="Base model flowing into your fork">
+          <div class="lineage-node base-node"><span>Base model</span><strong id="lineage-base-name">Choose a model</strong></div>
+          <div class="lineage-branch" aria-hidden="true"><i></i><i></i><i></i></div>
+          <div class="lineage-node fork-node"><span>Your fork</span><strong id="lineage-fork-name">Name your fork</strong></div>
+        </div>
         <form id="fork-form" class="action-form">
           <label for="fork-name">Name your fork</label>
           <input id="fork-name" name="name" value="My GLM-5.2" maxlength="80" required>
@@ -134,7 +140,7 @@
             </dl>
           </details>
           <div class="form-action-bar">
-            <span>Examples stay private to your managed fine-tuning job.</span>
+            <span>Your examples stay with this fork.</span>
             <button id="adapt-button" class="primary" type="submit">Fine-tune</button>
           </div>
         </form>
