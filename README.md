@@ -6,6 +6,8 @@
 
 OpenWeight lets a user choose one supported open-weight model, create an immutable lineage, fine-tune it from 5–20 example conversations, and chat with either the base or fine-tuned state. Together AI supplies the managed training and inference infrastructure; the browser never asks for provider credentials, hardware, model paths, Python, or local GPU setup.
 
+OpenWeight is deliberately a model-building toolkit, not an agent or copilot builder. It makes no assumptions about the application a user will build with their model.
+
 ## Run the managed MVP
 
 Requirements: Node.js 20+ and a server-side Together API key.
