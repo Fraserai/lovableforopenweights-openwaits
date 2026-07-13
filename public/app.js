@@ -5,6 +5,7 @@ const state = {
   runtime: null,
   currentStage: "choose",
   runSelection: "base",
+  activeExampleIndex: 0,
   adaptationPoll: null
 };
 
@@ -253,6 +254,7 @@ function renderAdaptation() {
     byId("adapt-objective").value = adaptation.objective;
     byId("adapt-name").value = adaptation.name;
     byId("examples-list").replaceChildren();
+    state.activeExampleIndex = 0;
     (adaptation.examples || []).forEach((example) => addExample(example));
     while (byId("examples-list").children.length < 5) addExample();
   }
@@ -460,39 +462,88 @@ function renderAll() {
   renderRun();
 }
 
-function addExample(example = {}) {
+function addExample(example = {}, { select = false } = {}) {
   const list = byId("examples-list");
   if (list.children.length >= 20) return;
   const row = document.createElement("div");
   row.className = "example-row";
   const index = list.children.length + 1;
   row.innerHTML = `
-    <div class="example-head"><strong>Example ${index}</strong><button class="remove-example" type="button">Remove</button></div>
-    <label class="example-field user-field"><span><b>U</b>User message</span><input class="example-user" maxlength="4000" required></label>
-    <label class="example-field assistant-field"><span><b>A</b>Ideal response</span><textarea class="example-assistant" maxlength="8000" required></textarea></label>
+    <div class="example-head">
+      <div><small>Conversation pair</small><strong>Example ${String(index).padStart(2, "0")}</strong></div>
+      <button class="remove-example" type="button">Remove</button>
+    </div>
+    <label class="example-field user-field"><span><b>U</b>User message</span><textarea class="example-user" maxlength="4000" placeholder="What the user asks"></textarea></label>
+    <span class="pair-arrow" aria-hidden="true">&rarr;</span>
+    <label class="example-field assistant-field"><span><b>A</b>Ideal response</span><textarea class="example-assistant" maxlength="8000" placeholder="The exact response your version should give"></textarea></label>
   `;
   row.querySelector(".example-user").value = example.user || "";
   row.querySelector(".example-assistant").value = example.assistant || "";
+  row.querySelectorAll("textarea").forEach((field) => {
+    field.addEventListener("input", renderExampleStudio);
+  });
   row.querySelector(".remove-example").addEventListener("click", () => {
     if (list.children.length <= 5) return;
+    const removedIndex = [...list.children].indexOf(row);
     row.remove();
-    [...list.children].forEach((item, itemIndex) => {
-      item.querySelector(".example-head strong").textContent = `Example ${itemIndex + 1}`;
-    });
-    renderExampleCount();
+    if (removedIndex < state.activeExampleIndex) state.activeExampleIndex -= 1;
+    state.activeExampleIndex = Math.min(state.activeExampleIndex, list.children.length - 1);
+    renderExampleStudio();
   });
   list.appendChild(row);
-  renderExampleCount();
+  if (select) state.activeExampleIndex = list.children.length - 1;
+  renderExampleStudio();
 }
 
-function renderExampleCount() {
-  const count = byId("examples-list").children.length;
-  setText("examples-count", `${count} of 20`);
-  setText("examples-readiness", count === 20 ? "Example set full" : "Ready to fine-tune");
+function renderExampleStudio() {
+  const rows = [...byId("examples-list").children];
+  const count = rows.length;
+  const completed = rows.filter((row) => (
+    row.querySelector(".example-user").value.trim()
+    && row.querySelector(".example-assistant").value.trim()
+  )).length;
+  const ready = count >= 5 && completed === count;
+  state.activeExampleIndex = Math.max(0, Math.min(state.activeExampleIndex, count - 1));
+
+  setText("examples-count", `${count} ${count === 1 ? "example" : "examples"}`);
+  setText("examples-readiness", ready ? "Example set ready" : `${completed} of ${count} complete`);
+  byId("examples-readiness").classList.toggle("ready", ready);
+  byId("example-progress-bar").style.width = `${count ? (completed / count) * 100 : 0}%`;
+  setText("example-position", `Example ${state.activeExampleIndex + 1} of ${count}`);
   byId("add-example").disabled = count >= 20;
-  document.querySelectorAll(".remove-example").forEach((button) => {
-    button.disabled = count <= 5;
+  byId("previous-example").disabled = state.activeExampleIndex === 0;
+  byId("next-example").disabled = state.activeExampleIndex >= count - 1;
+
+  const navigation = byId("example-nav");
+  navigation.replaceChildren();
+  rows.forEach((row, index) => {
+    const isComplete = Boolean(
+      row.querySelector(".example-user").value.trim()
+      && row.querySelector(".example-assistant").value.trim()
+    );
+    row.hidden = index !== state.activeExampleIndex;
+    row.querySelector(".example-head strong").textContent = `Example ${String(index + 1).padStart(2, "0")}`;
+    row.querySelector(".remove-example").disabled = count <= 5;
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = String(index + 1).padStart(2, "0");
+    button.className = isComplete ? "complete" : "";
+    button.classList.toggle("active", index === state.activeExampleIndex);
+    button.setAttribute("aria-label", `Open example ${index + 1}${isComplete ? ", complete" : ", incomplete"}`);
+    if (index === state.activeExampleIndex) button.setAttribute("aria-current", "step");
+    button.addEventListener("click", () => selectExample(index));
+    navigation.appendChild(button);
   });
+}
+
+function selectExample(index, { focus = false } = {}) {
+  state.activeExampleIndex = index;
+  renderExampleStudio();
+  if (focus) {
+    const row = byId("examples-list").children[state.activeExampleIndex];
+    row?.querySelector(".example-user")?.focus();
+  }
 }
 
 function collectExamples() {
@@ -502,7 +553,9 @@ function collectExamples() {
   }));
 }
 
-byId("add-example").addEventListener("click", () => addExample());
+byId("add-example").addEventListener("click", () => addExample({}, { select: true }));
+byId("previous-example").addEventListener("click", () => selectExample(state.activeExampleIndex - 1));
+byId("next-example").addEventListener("click", () => selectExample(state.activeExampleIndex + 1));
 for (let index = 0; index < 5; index += 1) addExample();
 
 async function refreshWorkspace() {
@@ -556,6 +609,19 @@ byId("adapt-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   clearNotice();
   const examples = collectExamples();
+  const incompleteIndex = examples.findIndex((example) => (
+    !example.user.trim() || !example.assistant.trim()
+  ));
+  if (incompleteIndex !== -1) {
+    selectExample(incompleteIndex);
+    const row = byId("examples-list").children[incompleteIndex];
+    const field = examples[incompleteIndex].user.trim()
+      ? row.querySelector(".example-assistant")
+      : row.querySelector(".example-user");
+    showNotice(`Complete both messages in example ${incompleteIndex + 1}.`);
+    field.focus();
+    return;
+  }
   const request = api(`/api/workspaces/${state.workspace.id}/fine-tune`, {
     method: "POST",
     body: JSON.stringify({

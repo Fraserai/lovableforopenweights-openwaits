@@ -95,16 +95,27 @@
           <section class="examples-section" aria-labelledby="examples-title">
             <div class="examples-heading">
               <div>
-                <span id="examples-count" class="examples-count">5 of 20</span>
-                <strong id="examples-title">Training examples</strong>
-                <small>Pair a user message with the response your model should learn.</small>
+                <span id="examples-count" class="examples-count">5 examples</span>
+                <strong id="examples-title">Teach by example</strong>
+                <small>Build the ideal conversations your version should learn from.</small>
               </div>
               <div class="examples-actions">
-                <span id="examples-readiness" class="examples-readiness">Ready to fine-tune</span>
+                <span id="examples-readiness" class="examples-readiness">0 of 5 complete</span>
                 <button id="add-example" class="secondary compact" type="button" aria-label="Add example">+ Add</button>
               </div>
             </div>
-            <div id="examples-list"></div>
+            <div class="example-progress" aria-hidden="true"><span id="example-progress-bar"></span></div>
+            <div class="examples-workspace">
+              <nav id="example-nav" class="example-nav" aria-label="Conversation examples"></nav>
+              <div class="example-canvas">
+                <div id="examples-list"></div>
+                <footer class="example-controls">
+                  <button id="previous-example" class="example-arrow" type="button" title="Previous example" aria-label="Previous example">&larr;</button>
+                  <span id="example-position">Example 1 of 5</span>
+                  <button id="next-example" class="example-arrow" type="button" title="Next example" aria-label="Next example">&rarr;</button>
+                </footer>
+              </div>
+            </div>
           </section>
           <div id="adaptation-progress" class="adaptation-progress hidden" role="status">
             <strong id="adaptation-status">Preparing</strong>
