@@ -89,6 +89,8 @@ function renderSteps() {
     button.disabled = !stageIsUnlocked(stage);
     button.classList.toggle("active", stage === state.currentStage);
     button.classList.toggle("complete", stageIsComplete(stage));
+    if (stage === state.currentStage) button.setAttribute("aria-current", "step");
+    else button.removeAttribute("aria-current");
     setText(`${stage}-step-status`, statuses[stage]);
   });
 }
@@ -212,6 +214,12 @@ function renderForkSource() {
 
   setText("lineage-base-name", state.model.name);
   setText("lineage-fork-name", byId("fork-name").value || "Untitled fork");
+  setText("fork-base-model", state.model.name);
+  setText("fork-base-publisher", state.model.publisher);
+  setText("fork-base-parameters", state.model.parameterCount || "Unavailable");
+  setText("fork-base-license", state.model.license);
+  const sourceLink = byId("fork-source-link");
+  sourceLink.href = state.model.sourceUrl;
 
   const model = document.createElement("strong");
   model.textContent = state.model.name;

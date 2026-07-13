@@ -29,19 +29,19 @@
       <nav class="steps" aria-label="Product loop">
         <button class="step active" data-stage="choose">
           <span class="step-number"><i aria-hidden="true"></i><b>01</b></span>
-          <span><strong>Choose</strong><small id="choose-step-status">Not chosen</small></span>
+          <span class="step-copy"><strong>Choose</strong><small>Find your foundation</small><em id="choose-step-status">Not chosen</em></span>
         </button>
         <button class="step" data-stage="fork" disabled>
           <span class="step-number"><i aria-hidden="true"></i><b>02</b></span>
-          <span><strong>Fork</strong><small id="fork-step-status">Not created</small></span>
+          <span class="step-copy"><strong>Fork</strong><small>Make it yours</small><em id="fork-step-status">Not created</em></span>
         </button>
         <button class="step" data-stage="adapt" disabled>
           <span class="step-number"><i aria-hidden="true"></i><b>03</b></span>
-          <span><strong>Fine-tune</strong><small id="adapt-step-status">Not started</small></span>
+          <span class="step-copy"><strong>Fine-tune</strong><small>Shape its behaviour</small><em id="adapt-step-status">Not started</em></span>
         </button>
         <button class="step" data-stage="run" disabled>
           <span class="step-number"><i aria-hidden="true"></i><b>04</b></span>
-          <span><strong>Run</strong><small id="run-step-status">Not started</small></span>
+          <span class="step-copy"><strong>Run</strong><small>Bring it online</small><em id="run-step-status">Not started</em></span>
         </button>
       </nav>
 
@@ -67,7 +67,13 @@
           <h2 id="choose-title">Choose your foundation</h2>
           <span>One focused starting point, ready to make your own.</span>
         </header>
-        <div id="model-list" class="model-list" aria-live="polite"></div>
+        <div class="section-heading">
+          <div><h3>Supported foundation</h3><p>The model available for this managed workspace.</p></div>
+          <span class="status-badge supported"><i></i>Supported</span>
+        </div>
+        <div id="model-list" class="model-list" aria-live="polite">
+          <p class="loading-state">Loading the supported model…</p>
+        </div>
       </section>
 
       <section id="fork" class="stage" aria-labelledby="fork-title">
@@ -76,17 +82,41 @@
           <h2 id="fork-title">Make it yours.</h2>
           <span>Your fork owns its history while referencing the immutable base weights.</span>
         </header>
-        <div class="fork-lineage" role="img" aria-label="Base model flowing into your fork">
-          <div class="lineage-node base-node"><span>Base model</span><strong id="lineage-base-name">Choose a model</strong></div>
-          <div class="lineage-branch" aria-hidden="true"><i></i><i></i><i></i></div>
-          <div class="lineage-node fork-node"><span>Your fork</span><strong id="lineage-fork-name">Name your fork</strong></div>
+        <div class="fork-layout">
+          <div class="fork-main">
+            <div class="fork-lineage" role="img" aria-label="Base model flowing into your fork">
+              <div class="lineage-node base-node"><span>Base model</span><strong id="lineage-base-name">Choose a model</strong></div>
+              <div class="lineage-branch" aria-hidden="true"><i></i><i></i><i></i></div>
+              <div class="lineage-node fork-node"><span>Your fork</span><strong id="lineage-fork-name">Name your fork</strong></div>
+            </div>
+            <form id="fork-form" class="action-form">
+              <label for="fork-name">Name your fork</label>
+              <input id="fork-name" name="name" value="My GLM-5.2" maxlength="80" required>
+              <div id="fork-source" class="source-summary"></div>
+              <button class="primary" type="submit">Create fork</button>
+            </form>
+          </div>
+          <aside class="fork-context" aria-label="Fork context">
+            <section class="context-panel">
+              <h3>Lineage outcome</h3>
+              <ul class="context-list">
+                <li><span class="context-icon ownership" aria-hidden="true"></span><div><strong>Owned history</strong><p>Your fork gets its own name and future model states.</p></div></li>
+                <li><span class="context-icon preserved" aria-hidden="true"></span><div><strong>Original preserved</strong><p>The foundation remains fixed as your starting point.</p></div></li>
+                <li><span class="context-icon tuning" aria-hidden="true"></span><div><strong>Fine-tune when ready</strong><p>Examples shape the behaviour of your version.</p></div></li>
+              </ul>
+            </section>
+            <section class="context-panel base-details">
+              <h3>Foundation details</h3>
+              <dl>
+                <div><dt>Model</dt><dd id="fork-base-model">-</dd></div>
+                <div><dt>Publisher</dt><dd id="fork-base-publisher">-</dd></div>
+                <div><dt>Parameters</dt><dd id="fork-base-parameters">-</dd></div>
+                <div><dt>License</dt><dd id="fork-base-license">-</dd></div>
+              </dl>
+              <a id="fork-source-link" class="source-link" href="#" target="_blank" rel="noreferrer">Open model source <span aria-hidden="true">↗</span></a>
+            </section>
+          </aside>
         </div>
-        <form id="fork-form" class="action-form">
-          <label for="fork-name">Name your fork</label>
-          <input id="fork-name" name="name" value="My GLM-5.2" maxlength="80" required>
-          <div id="fork-source" class="source-summary"></div>
-          <button class="primary" type="submit">Create fork</button>
-        </form>
       </section>
 
       <section id="adapt" class="stage" aria-labelledby="adapt-title">
